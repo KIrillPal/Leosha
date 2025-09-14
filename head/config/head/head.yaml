@@ -1,0 +1,17 @@
+# Конфигурация сервоприводов головы робота
+neck_channel: 3
+face_channel: 2
+
+pwm_min_pulse: 1000
+pwm_max_pulse: 2000
+
+neck_min_zero: 0.19
+neck_max_zero: 0.33
+neck_range: 0.5
+face_zero_angle: 120
+
+pca_channels: 16
+pca_frequency: 250
+
+zero_throttle: 0.05
+speed_to_throttle_ratio: 0.85

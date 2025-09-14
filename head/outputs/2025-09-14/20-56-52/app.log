@@ -1,0 +1,87 @@
+[2025-09-14 20:56:52,263][picamera2.picamera2][INFO] - Initialization successful.
+[2025-09-14 20:56:52,264][picamera2.picamera2][INFO] - Camera now open.
+[2025-09-14 20:56:52,266][picamera2.picamera2][INFO] - Camera configuration has been adjusted!
+[2025-09-14 20:56:52,267][picamera2.picamera2][INFO] - Configuration successful!
+[2025-09-14 20:56:52,303][picamera2.picamera2][INFO] - Camera started
+[2025-09-14 20:56:52,307][werkzeug][INFO] - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://192.168.31.232:5000
+[2025-09-14 20:56:52,308][werkzeug][INFO] - [33mPress CTRL+C to quit[0m
+[2025-09-14 20:56:53,245][werkzeug][INFO] - 192.168.31.72 - - [14/Sep/2025 20:56:53] "GET /api/status HTTP/1.1" 200 -
+[2025-09-14 20:56:55,264][werkzeug][INFO] - 192.168.31.72 - - [14/Sep/2025 20:56:55] "GET /api/status HTTP/1.1" 200 -
+[2025-09-14 20:56:56,601][werkzeug][INFO] - 192.168.31.72 - - [14/Sep/2025 20:56:56] "GET /api/status HTTP/1.1" 200 -
+[2025-09-14 20:56:57,261][werkzeug][INFO] - 192.168.31.72 - - [14/Sep/2025 20:56:57] "GET /api/status HTTP/1.1" 200 -
+[2025-09-14 20:56:58,263][werkzeug][INFO] - 192.168.31.72 - - [14/Sep/2025 20:56:58] "GET /api/status HTTP/1.1" 200 -
+[2025-09-14 20:56:59,190][werkzeug][INFO] - 192.168.31.72 - - [14/Sep/2025 20:56:59] "GET / HTTP/1.1" 200 -
+[2025-09-14 20:56:59,286][werkzeug][INFO] - 192.168.31.72 - - [14/Sep/2025 20:56:59] "GET /video_feed HTTP/1.1" 200 -
+[2025-09-14 20:57:00,262][werkzeug][INFO] - 192.168.31.72 - - [14/Sep/2025 20:57:00] "GET /api/status HTTP/1.1" 200 -
+[2025-09-14 20:57:01,259][werkzeug][INFO] - 192.168.31.72 - - [14/Sep/2025 20:57:01] "GET /api/status HTTP/1.1" 200 -
+[2025-09-14 20:57:02,260][werkzeug][INFO] - 192.168.31.72 - - [14/Sep/2025 20:57:02] "GET /api/status HTTP/1.1" 200 -
+[2025-09-14 20:57:03,261][werkzeug][INFO] - 192.168.31.72 - - [14/Sep/2025 20:57:03] "GET /api/status HTTP/1.1" 200 -
+[2025-09-14 20:57:04,260][werkzeug][INFO] - 192.168.31.72 - - [14/Sep/2025 20:57:04] "GET /api/status HTTP/1.1" 200 -
+[2025-09-14 20:57:05,262][werkzeug][INFO] - 192.168.31.72 - - [14/Sep/2025 20:57:05] "GET /api/status HTTP/1.1" 200 -
+[2025-09-14 20:57:06,264][werkzeug][INFO] - 192.168.31.72 - - [14/Sep/2025 20:57:06] "GET /api/status HTTP/1.1" 200 -
+[2025-09-14 20:57:07,262][werkzeug][INFO] - 192.168.31.72 - - [14/Sep/2025 20:57:07] "GET /api/status HTTP/1.1" 200 -
+[2025-09-14 20:57:08,259][werkzeug][INFO] - 192.168.31.72 - - [14/Sep/2025 20:57:08] "GET /api/status HTTP/1.1" 200 -
+[2025-09-14 20:57:09,259][werkzeug][INFO] - 192.168.31.72 - - [14/Sep/2025 20:57:09] "GET /api/status HTTP/1.1" 200 -
+[2025-09-14 20:57:10,261][werkzeug][INFO] - 192.168.31.72 - - [14/Sep/2025 20:57:10] "GET /api/status HTTP/1.1" 200 -
+[2025-09-14 20:57:11,259][werkzeug][INFO] - 192.168.31.72 - - [14/Sep/2025 20:57:11] "GET /api/status HTTP/1.1" 200 -
+[2025-09-14 20:57:12,261][werkzeug][INFO] - 192.168.31.72 - - [14/Sep/2025 20:57:12] "GET /api/status HTTP/1.1" 200 -
+[2025-09-14 20:57:13,261][werkzeug][INFO] - 192.168.31.72 - - [14/Sep/2025 20:57:13] "GET /api/status HTTP/1.1" 200 -
+[2025-09-14 20:57:14,259][werkzeug][INFO] - 192.168.31.72 - - [14/Sep/2025 20:57:14] "GET /api/status HTTP/1.1" 200 -
+[2025-09-14 20:57:15,259][werkzeug][INFO] - 192.168.31.72 - - [14/Sep/2025 20:57:15] "GET /api/status HTTP/1.1" 200 -
+[2025-09-14 20:57:16,261][werkzeug][INFO] - 192.168.31.72 - - [14/Sep/2025 20:57:16] "GET /api/status HTTP/1.1" 200 -
+[2025-09-14 20:57:17,259][werkzeug][INFO] - 192.168.31.72 - - [14/Sep/2025 20:57:17] "GET /api/status HTTP/1.1" 200 -
+[2025-09-14 20:57:18,261][werkzeug][INFO] - 192.168.31.72 - - [14/Sep/2025 20:57:18] "GET /api/status HTTP/1.1" 200 -
+[2025-09-14 20:57:19,259][werkzeug][INFO] - 192.168.31.72 - - [14/Sep/2025 20:57:19] "GET /api/status HTTP/1.1" 200 -
+[2025-09-14 20:57:20,259][werkzeug][INFO] - 192.168.31.72 - - [14/Sep/2025 20:57:20] "GET /api/status HTTP/1.1" 200 -
+[2025-09-14 20:57:21,259][werkzeug][INFO] - 192.168.31.72 - - [14/Sep/2025 20:57:21] "GET /api/status HTTP/1.1" 200 -
+[2025-09-14 20:57:22,263][werkzeug][INFO] - 192.168.31.72 - - [14/Sep/2025 20:57:22] "GET /api/status HTTP/1.1" 200 -
+[2025-09-14 20:57:23,259][werkzeug][INFO] - 192.168.31.72 - - [14/Sep/2025 20:57:23] "GET /api/status HTTP/1.1" 200 -
+[2025-09-14 20:57:24,263][werkzeug][INFO] - 192.168.31.72 - - [14/Sep/2025 20:57:24] "GET /api/status HTTP/1.1" 200 -
+[2025-09-14 20:57:25,263][werkzeug][INFO] - 192.168.31.72 - - [14/Sep/2025 20:57:25] "GET /api/status HTTP/1.1" 200 -
+[2025-09-14 20:57:26,260][werkzeug][INFO] - 192.168.31.72 - - [14/Sep/2025 20:57:26] "GET /api/status HTTP/1.1" 200 -
+[2025-09-14 20:57:27,262][werkzeug][INFO] - 192.168.31.72 - - [14/Sep/2025 20:57:27] "GET /api/status HTTP/1.1" 200 -
+[2025-09-14 20:57:28,262][werkzeug][INFO] - 192.168.31.72 - - [14/Sep/2025 20:57:28] "GET /api/status HTTP/1.1" 200 -
+[2025-09-14 20:57:29,260][werkzeug][INFO] - 192.168.31.72 - - [14/Sep/2025 20:57:29] "GET /api/status HTTP/1.1" 200 -
+[2025-09-14 20:57:30,259][werkzeug][INFO] - 192.168.31.72 - - [14/Sep/2025 20:57:30] "GET /api/status HTTP/1.1" 200 -
+[2025-09-14 20:57:31,263][werkzeug][INFO] - 192.168.31.72 - - [14/Sep/2025 20:57:31] "GET /api/status HTTP/1.1" 200 -
+[2025-09-14 20:57:32,262][werkzeug][INFO] - 192.168.31.72 - - [14/Sep/2025 20:57:32] "GET /api/status HTTP/1.1" 200 -
+[2025-09-14 20:57:33,258][werkzeug][INFO] - 192.168.31.72 - - [14/Sep/2025 20:57:33] "GET /api/status HTTP/1.1" 200 -
+[2025-09-14 20:57:34,262][werkzeug][INFO] - 192.168.31.72 - - [14/Sep/2025 20:57:34] "GET /api/status HTTP/1.1" 200 -
+[2025-09-14 20:57:35,262][werkzeug][INFO] - 192.168.31.72 - - [14/Sep/2025 20:57:35] "GET /api/status HTTP/1.1" 200 -
+[2025-09-14 20:57:36,263][werkzeug][INFO] - 192.168.31.72 - - [14/Sep/2025 20:57:36] "GET /api/status HTTP/1.1" 200 -
+[2025-09-14 20:57:37,264][werkzeug][INFO] - 192.168.31.72 - - [14/Sep/2025 20:57:37] "GET /api/status HTTP/1.1" 200 -
+[2025-09-14 20:57:38,259][werkzeug][INFO] - 192.168.31.72 - - [14/Sep/2025 20:57:38] "GET /api/status HTTP/1.1" 200 -
+[2025-09-14 20:57:39,259][werkzeug][INFO] - 192.168.31.72 - - [14/Sep/2025 20:57:39] "GET /api/status HTTP/1.1" 200 -
+[2025-09-14 20:57:40,262][werkzeug][INFO] - 192.168.31.72 - - [14/Sep/2025 20:57:40] "GET /api/status HTTP/1.1" 200 -
+[2025-09-14 20:57:41,267][werkzeug][INFO] - 192.168.31.72 - - [14/Sep/2025 20:57:41] "GET /api/status HTTP/1.1" 200 -
+[2025-09-14 20:57:42,259][werkzeug][INFO] - 192.168.31.72 - - [14/Sep/2025 20:57:42] "GET /api/status HTTP/1.1" 200 -
+[2025-09-14 20:57:43,262][werkzeug][INFO] - 192.168.31.72 - - [14/Sep/2025 20:57:43] "GET /api/status HTTP/1.1" 200 -
+[2025-09-14 20:57:44,261][werkzeug][INFO] - 192.168.31.72 - - [14/Sep/2025 20:57:44] "GET /api/status HTTP/1.1" 200 -
+[2025-09-14 20:57:45,261][werkzeug][INFO] - 192.168.31.72 - - [14/Sep/2025 20:57:45] "GET /api/status HTTP/1.1" 200 -
+[2025-09-14 20:57:46,261][werkzeug][INFO] - 192.168.31.72 - - [14/Sep/2025 20:57:46] "GET /api/status HTTP/1.1" 200 -
+[2025-09-14 20:57:47,261][werkzeug][INFO] - 192.168.31.72 - - [14/Sep/2025 20:57:47] "GET /api/status HTTP/1.1" 200 -
+[2025-09-14 20:57:48,262][werkzeug][INFO] - 192.168.31.72 - - [14/Sep/2025 20:57:48] "GET /api/status HTTP/1.1" 200 -
+[2025-09-14 20:57:49,259][werkzeug][INFO] - 192.168.31.72 - - [14/Sep/2025 20:57:49] "GET /api/status HTTP/1.1" 200 -
+[2025-09-14 20:57:50,262][werkzeug][INFO] - 192.168.31.72 - - [14/Sep/2025 20:57:50] "GET /api/status HTTP/1.1" 200 -
+[2025-09-14 20:57:51,262][werkzeug][INFO] - 192.168.31.72 - - [14/Sep/2025 20:57:51] "GET /api/status HTTP/1.1" 200 -
+[2025-09-14 20:57:52,259][werkzeug][INFO] - 192.168.31.72 - - [14/Sep/2025 20:57:52] "GET /api/status HTTP/1.1" 200 -
+[2025-09-14 20:57:53,262][werkzeug][INFO] - 192.168.31.72 - - [14/Sep/2025 20:57:53] "GET /api/status HTTP/1.1" 200 -
+[2025-09-14 20:57:54,261][werkzeug][INFO] - 192.168.31.72 - - [14/Sep/2025 20:57:54] "GET /api/status HTTP/1.1" 200 -
+[2025-09-14 20:57:55,261][werkzeug][INFO] - 192.168.31.72 - - [14/Sep/2025 20:57:55] "GET /api/status HTTP/1.1" 200 -
+[2025-09-14 20:57:56,261][werkzeug][INFO] - 192.168.31.72 - - [14/Sep/2025 20:57:56] "GET /api/status HTTP/1.1" 200 -
+[2025-09-14 20:57:57,258][werkzeug][INFO] - 192.168.31.72 - - [14/Sep/2025 20:57:57] "GET /api/status HTTP/1.1" 200 -
+[2025-09-14 20:57:58,263][werkzeug][INFO] - 192.168.31.72 - - [14/Sep/2025 20:57:58] "GET /api/status HTTP/1.1" 200 -
+[2025-09-14 20:57:59,261][werkzeug][INFO] - 192.168.31.72 - - [14/Sep/2025 20:57:59] "GET /api/status HTTP/1.1" 200 -
+[2025-09-14 20:58:00,259][werkzeug][INFO] - 192.168.31.72 - - [14/Sep/2025 20:58:00] "GET /api/status HTTP/1.1" 200 -
+[2025-09-14 20:58:01,259][werkzeug][INFO] - 192.168.31.72 - - [14/Sep/2025 20:58:01] "GET /api/status HTTP/1.1" 200 -
+[2025-09-14 20:58:02,264][werkzeug][INFO] - 192.168.31.72 - - [14/Sep/2025 20:58:02] "GET /api/status HTTP/1.1" 200 -
+[2025-09-14 20:58:03,260][werkzeug][INFO] - 192.168.31.72 - - [14/Sep/2025 20:58:03] "GET /api/status HTTP/1.1" 200 -
+[2025-09-14 20:58:04,261][werkzeug][INFO] - 192.168.31.72 - - [14/Sep/2025 20:58:04] "GET /api/status HTTP/1.1" 200 -
+[2025-09-14 20:58:05,260][werkzeug][INFO] - 192.168.31.72 - - [14/Sep/2025 20:58:05] "GET /api/status HTTP/1.1" 200 -
+[2025-09-14 20:58:06,261][werkzeug][INFO] - 192.168.31.72 - - [14/Sep/2025 20:58:06] "GET /api/status HTTP/1.1" 200 -
+[2025-09-14 20:58:07,259][werkzeug][INFO] - 192.168.31.72 - - [14/Sep/2025 20:58:07] "GET /api/status HTTP/1.1" 200 -
+[2025-09-14 20:58:09,244][werkzeug][INFO] - 192.168.31.72 - - [14/Sep/2025 20:58:09] "GET /api/status HTTP/1.1" 200 -
+[2025-09-14 20:58:09,671][picamera2.picamera2][INFO] - Camera stopped
