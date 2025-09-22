@@ -1,64 +1,50 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Управление головой робота</title>
+    <title>Robot Head Control</title>
     <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
         body {
             font-family: Arial, sans-serif;
-            margin: 0;
-            padding: 20px;
             background-color: #f0f0f0;
+            overflow: hidden;
+            height: 100vh;
         }
         .container {
-            max-width: 1200px;
-            margin: 0 auto;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
             background: white;
-            padding: 20px;
-            border-radius: 10px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
         }
         h1 {
             text-align: center;
             color: #333;
+            padding: 10px;
+            background-color: #f8f9fa;
+            border-bottom: 1px solid #dee2e6;
         }
         .video-container {
-            display: flex;
-            justify-content: center;
-            margin-bottom: 20px;
-        }
-        .video-container img {
-            max-width: 100%;
-            border: 2px solid #ccc;
-            border-radius: 8px;
-        }
-        .control-area {
-            width: 100%;
-            height: 300px;
-            background-color: #e0e0e0;
-            border: 2px solid #ccc;
-            border-radius: 8px;
-            margin: 20px 0;
+            flex: 1;
             position: relative;
-            cursor: pointer;
-            touch-action: none;
+            overflow: hidden;
         }
-        .joystick {
-            width: 50px;
-            height: 50px;
-            background-color: #007bff;
-            border-radius: 50%;
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            display: none;
+        #videoFeed {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
         }
         .controls {
             display: flex;
             justify-content: space-between;
-            margin-bottom: 20px;
+            padding: 10px;
+            background-color: #f8f9fa;
+            border-top: 1px solid #dee2e6;
             flex-wrap: wrap;
         }
         button {
@@ -86,8 +72,28 @@
         }
         .status {
             text-align: center;
-            font-size: 18px;
-            margin-top: 20px;
+            font-size: 16px;
+            padding: 5px;
+            background-color: #f8f9fa;
+            border-top: 1px solid #dee2e6;
+        }
+        .instructions {
+            text-align: center;
+            font-size: 14px;
+            color: #6c757d;
+            padding: 5px;
+            background-color: #f8f9fa;
+        }
+        #centerDot {
+            position: absolute;
+            width: 8px;
+            height: 8px;
+            background-color: rgba(255, 0, 0, 0.7);
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 100;
+            display: none;
+            transform: translate(-50%, -50%);
         }
         @media (max-width: 768px) {
             .controls {
@@ -101,109 +107,91 @@
 </head>
 <body>
     <div class="container">
-        <h1>Управление головой робота</h1>
+        <h1>Robot Head Control</h1>
         
-        <div class="video-container">
-            <img src="{{ url_for('video_feed') }}" alt="Видео с камеры">
+        <div class="video-container" id="videoContainer">
+            <img id="videoFeed" src="{{ url_for('video_feed') }}" alt="Camera Feed">
+            <div id="centerDot"></div>
+        </div>
+        
+        <div class="instructions">
+            Press ESC to exit control mode | Move mouse to control head
         </div>
         
         <div class="controls">
-            <button onclick="resetPosition()">Сброс позиции</button>
+            <button onclick="resetPosition()">Reset Position</button>
             <button id="trackingBtn" class="tracking-btn" onclick="toggleTracking()">
-                Включить отслеживание
+                Enable Control
             </button>
             <button class="capture-btn" onclick="captureImage()">
-                Сделать снимок
+                Capture Image
             </button>
-        </div>
-        
-        <div class="control-area" id="controlArea">
-            <div class="joystick" id="joystick"></div>
         </div>
         
         <div class="status">
-            Позиция: X: <span id="posX">0</span>, Y: <span id="posY">0</span>
+            Position: X: <span id="posX">0</span>, Y: <span id="posY">0</span> | 
+            Control: <span id="controlStatus">Disabled</span>
         </div>
     </div>
 
     <script>
-        let isDragging = false;
-        let lastX = 0;
-        let lastY = 0;
         let isTracking = false;
+        let isPointerLocked = false;
         
-        const controlArea = document.getElementById('controlArea');
-        const joystick = document.getElementById('joystick');
+        const videoContainer = document.getElementById('videoContainer');
+        const videoFeed = document.getElementById('videoFeed');
+        const centerDot = document.getElementById('centerDot');
         const posX = document.getElementById('posX');
         const posY = document.getElementById('posY');
         const trackingBtn = document.getElementById('trackingBtn');
+        const controlStatus = document.getElementById('controlStatus');
         
-        // Обработчики событий мыши
-        controlArea.addEventListener('mousedown', startDrag);
-        document.addEventListener('mousemove', drag);
-        document.addEventListener('mouseup', stopDrag);
+        // Event handlers
+        document.addEventListener('mousemove', handleMouseMove);
+        document.addEventListener('keydown', handleKeyDown);
+        document.addEventListener('pointerlockchange', handlePointerLockChange);
+        document.addEventListener('mozpointerlockchange', handlePointerLockChange);
+        document.addEventListener('webkitpointerlockchange', handlePointerLockChange);
         
-        // Обработчики событий касания
-        controlArea.addEventListener('touchstart', handleTouchStart);
-        document.addEventListener('touchmove', handleTouchMove);
-        document.addEventListener('touchend', handleTouchEnd);
-        
-        function startDrag(e) {
-            isDragging = true;
-            joystick.style.display = 'block';
-            updateJoystickPosition(e.clientX, e.clientY);
-            lastX = e.clientX;
-            lastY = e.clientY;
-        }
-        
-        function drag(e) {
-            if (!isDragging) return;
+        function handlePointerLockChange() {
+            isPointerLocked = document.pointerLockElement === videoContainer ||
+                             document.mozPointerLockElement === videoContainer ||
+                             document.webkitPointerLockElement === videoContainer;
             
-            const dx = e.clientX - lastX;
-            const dy = e.clientY - lastY;
+            if (isPointerLocked) {
+                // Pointer lock successfully acquired
+                centerDot.style.display = 'block';
+                centerDot.style.left = '50%';
+                centerDot.style.top = '50%';
+                videoFeed.style.cursor = 'none';
+            } else {
+                // Pointer lock lost
+                centerDot.style.display = 'none';
+                videoFeed.style.cursor = 'default';
+                if (isTracking) {
+                    disableTracking();
+                }
+            }
+        }
+        
+        function handleMouseMove(e) {
+            if (!isTracking || !isPointerLocked) return;
             
-            updatePosition(dx, dy);
-            updateJoystickPosition(e.clientX, e.clientY);
+            // Use relative movement for control
+            const dx = e.movementX || 0;
+            const dy = e.movementY || 0;
             
-            lastX = e.clientX;
-            lastY = e.clientY;
+            if (dx !== 0 || dy !== 0) {
+                updatePosition(dx, dy);
+            }
         }
         
-        function stopDrag() {
-            isDragging = false;
-            joystick.style.display = 'none';
-        }
-        
-        function handleTouchStart(e) {
-            e.preventDefault();
-            const touch = e.touches[0];
-            startDrag({
-                clientX: touch.clientX,
-                clientY: touch.clientY
-            });
-        }
-        
-        function handleTouchMove(e) {
-            e.preventDefault();
-            if (!isDragging) return;
-            const touch = e.touches[0];
-            drag({
-                clientX: touch.clientX,
-                clientY: touch.clientY
-            });
-        }
-        
-        function handleTouchEnd() {
-            stopDrag();
-        }
-        
-        function updateJoystickPosition(x, y) {
-            const rect = controlArea.getBoundingClientRect();
-            const joystickX = Math.max(0, Math.min(x - rect.left, rect.width));
-            const joystickY = Math.max(0, Math.min(y - rect.top, rect.height));
-            
-            joystick.style.left = joystickX + 'px';
-            joystick.style.top = joystickY + 'px';
+        function handleKeyDown(e) {
+            if (e.key === 'Escape' || e.keyCode === 27) {
+                if (isTracking) {
+                    disableTracking();
+                }
+            }
         }
         
         function updatePosition(dx, dy) {
@@ -238,15 +226,66 @@
         }
         
         function toggleTracking() {
+            if (isTracking) {
+                disableTracking();
+            } else {
+                enableTracking();
+            }
+        }
+        
+        function enableTracking() {
+            // Request pointer lock on the container, not the image
+            videoContainer.requestPointerLock = videoContainer.requestPointerLock || 
+                                              videoContainer.mozRequestPointerLock ||
+                                              videoContainer.webkitRequestPointerLock;
+            
+            if (videoContainer.requestPointerLock) {
+                videoContainer.requestPointerLock();
+                
+                // Update UI immediately
+                isTracking = true;
+                trackingBtn.textContent = 'Disable Control';
+                trackingBtn.classList.add('active');
+                controlStatus.textContent = 'Enabled';
+                controlStatus.style.color = 'green';
+                
+                // Notify server
+                fetch('/api/tracking', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ tracking: true })
+                });
+            } else {
+                alert('Pointer Lock API is not supported in your browser');
+            }
+        }
+        
+        function disableTracking() {
+            // Exit pointer lock
+            document.exitPointerLock = document.exitPointerLock || 
+                                      document.mozExitPointerLock ||
+                                      document.webkitExitPointerLock;
+            
+            if (document.exitPointerLock) {
+                document.exitPointerLock();
+            }
+            
+            // Update UI
+            isTracking = false;
+            trackingBtn.textContent = 'Enable Control';
+            trackingBtn.classList.remove('active');
+            controlStatus.textContent = 'Disabled';
+            controlStatus.style.color = 'red';
+            
+            // Notify server
             fetch('/api/tracking', {
-                method: 'POST'
-            })
-            .then(response => response.json())
-            .then(data => {
-                isTracking = data.tracking;
-                trackingBtn.textContent = isTracking ? 
-                    'Выключить отслеживание' : 'Включить отслеживание';
-                trackingBtn.classList.toggle('active', isTracking);
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ tracking: false })
             });
         }
         
@@ -257,22 +296,20 @@
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    alert('Снимок сохранен!');
+                    alert('Image captured successfully!');
                 } else {
-                    alert('Ошибка при сохранении снимка: ' + data.error);
+                    alert('Error capturing image: ' + data.error);
                 }
             });
         }
         
-        // Автоматическое обновление статуса
+        // Auto-update status
         setInterval(() => {
             fetch('/api/status')
             .then(response => response.json())
             .then(data => {
-                if (!isDragging) {
-                    posX.textContent = Math.round(data.x);
-                    posY.textContent = Math.round(data.y);
-                }
+                posX.textContent = Math.round(data.x);
+                posY.textContent = Math.round(data.y);
             });
         }, 1000);
     </script>

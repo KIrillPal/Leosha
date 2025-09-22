@@ -5,23 +5,27 @@ import threading
 import time
 
 class CameraController:
-    """Класс для управления камерой и захвата видео"""
-    def __init__(self, config):
+    """Class for controlling camera and capturing video"""
+    def __init__(self, config, output_dir="captured_images", save_images=True):
         self.config = config
+        self.output_dir = Path(output_dir)
+        self.save_images = save_images
+        self.output_dir.mkdir(exist_ok=True, parents=True)
+        
         self.picam2 = Picamera2(tuning=config.tuning_file if config.tuning_file else None)
         self.frame = None
         self.lock = threading.Lock()
         self.running = False
         
     def setup(self):
-        """Настройка и запуск камеры"""
-        # Создание конфигурации
+        """Setup and start camera"""
+        # Create configuration
         config = self.picam2.create_still_configuration(
             main={"size": tuple(self.config.resolution)}
         )
         self.picam2.configure(config)
         
-        # Установка параметров
+        # Set controls
         self.picam2.set_controls({
             "ExposureTime": self.config.exposure_time,
             "AnalogueGain": self.config.analogue_gain,
@@ -29,43 +33,44 @@ class CameraController:
             "AeEnable": self.config.ae_enable
         })
         
-        # Запуск камеры
+        # Start camera
         self.picam2.start()
         self.running = True
         
-        # Запуск потока для захвата кадров
+        # Start frame capture thread
         self.thread = threading.Thread(target=self._capture_loop)
+        self.thread.daemon = True
         self.thread.start()
         
     def _capture_loop(self):
-        """Цикл захвата кадров в отдельном потоке"""
+        """Frame capture loop in background thread"""
         while self.running:
             frame = self.picam2.capture_array()
-            # Конвертация из RGB в BGR для OpenCV
+            # Convert from RGB to BGR for OpenCV
             frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
             with self.lock:
                 self.frame = frame
             time.sleep(1 / self.config.fps)
     
     def get_frame(self):
-        """Получение текущего кадра"""
+        """Get current frame"""
         with self.lock:
             return self.frame
             
-    def capture_image(self, output_path=None):
-        """Захват и сохранение отдельного изображения"""
-        if output_path is None:
-            output_path = self.config.output_path
+    def capture_image(self, filename=None):
+        """Capture and save an image"""
+        if not self.save_images:
+            return
             
-        output_dir = Path(output_path)
-        output_dir.mkdir(exist_ok=True, parents=True)
-        
+        if filename is None:
+            timestamp = int(time.time())
+            filename = f"capture_{timestamp}.jpg"
+            
         frame = self.picam2.capture_array()
-        timestamp = int(time.time())
-        cv2.imwrite(str(output_dir / f"capture_{timestamp}.jpg"), frame)
+        cv2.imwrite(str(self.output_dir / filename), frame)
         
     def stop(self):
-        """Остановка камеры"""
+        """Stop camera"""
         self.running = False
         if hasattr(self, 'thread') and self.thread.is_alive():
             self.thread.join()
