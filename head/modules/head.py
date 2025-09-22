@@ -1,4 +1,3 @@
-from adafruit_servokit import ServoKit
 import numpy as np
 import time
 import threading
@@ -84,12 +83,9 @@ class ContinuousServoController:
 
 class HeadController:
     """Class for controlling robot head"""
-    def __init__(self, config):
+    def __init__(self, kit, config):
         self.config = config
-        self.kit = ServoKit(
-            channels=int(config.pca.channels), 
-            frequency=int(config.pca.frequency)
-        )
+        self.kit = kit
         
         # Initialize neck (continuous servo)
         self.neck = ContinuousServoController(

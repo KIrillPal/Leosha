@@ -21,6 +21,7 @@
             flex-direction: column;
             height: 100vh;
             background: white;
+            position: relative;
         }
         h1 {
             text-align: center;
@@ -56,9 +57,15 @@
             cursor: pointer;
             font-size: 16px;
             margin: 5px;
+            transition: all 0.3s;
         }
-        button:hover {
+        button:hover:not(:disabled) {
             background-color: #0056b3;
+        }
+        button:disabled {
+            background-color: #6c757d;
+            cursor: not-allowed;
+            opacity: 0.6;
         }
         .tracking-btn {
             background-color: #28a745;
@@ -95,19 +102,151 @@
             display: none;
             transform: translate(-50%, -50%);
         }
+        
+        /* Keyboard status indicators */
+        .keyboard-status {
+            position: absolute;
+            top: 80px;
+            left: 10px;
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 8px;
+            padding: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            z-index: 50;
+        }
+        .key-indicator {
+            display: flex;
+            align-items: center;
+            margin: 5px 0;
+            font-size: 14px;
+        }
+        .key-box {
+            width: 30px;
+            height: 30px;
+            border: 2px solid #ccc;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 10px;
+            font-weight: bold;
+            background-color: #f8f9fa;
+            transition: all 0.2s;
+        }
+        .key-box.active.wasd {
+            background-color: #ff6b35; /* Orange for WASD */
+            border-color: #ff6b35;
+            color: white;
+        }
+        .key-box.active.shift {
+            background-color: #007bff; /* Blue for Shift */
+            border-color: #007bff;
+            color: white;
+        }
+        .key-label {
+            font-size: 12px;
+            color: #666;
+        }
+        
+        /* Mobile warning */
+        .mobile-warning {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            color: white;
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            padding: 20px;
+            flex-direction: column;
+        }
+        .mobile-warning h2 {
+            margin-bottom: 20px;
+            color: #ff6b6b;
+        }
+        .mobile-warning p {
+            font-size: 18px;
+            line-height: 1.5;
+            max-width: 500px;
+        }
+        
+        /* Car controls */
+        .car-controls {
+            background-color: #f8f9fa;
+            padding: 10px;
+            border-top: 1px solid #dee2e6;
+        }
+        .car-controls h3 {
+            text-align: center;
+            margin-bottom: 10px;
+            color: #333;
+        }
+        .car-buttons {
+            display: flex;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: 5px;
+        }
+        .car-btn {
+            padding: 8px 15px;
+            font-size: 14px;
+        }
+        .stop-btn {
+            background-color: #dc3545;
+        }
+        
         @media (max-width: 768px) {
-            .controls {
-                flex-direction: column;
+            .container {
+                display: none;
             }
-            button {
-                width: 100%;
+            .mobile-warning {
+                display: flex;
             }
         }
     </style>
 </head>
 <body>
+    <!-- Mobile Warning -->
+    <div class="mobile-warning">
+        <h2>Desktop Only</h2>
+        <p>This control interface is designed for desktop use only. Please access this page from a computer with a keyboard to control the robot.</p>
+        <p>📱🚫 → 💻✅</p>
+    </div>
+
     <div class="container">
-        <h1>Robot Head Control</h1>
+        <h1>Robot Head & Car Control</h1>
+        
+        <!-- Keyboard Status Indicators -->
+        <div class="keyboard-status">
+            <div class="key-indicator">
+                <div class="key-box" id="keyW">W</div>
+                <span>Forward</span>
+            </div>
+            <div class="key-indicator">
+                <div class="key-box" id="keyA">A</div>
+                <span>Left</span>
+            </div>
+            <div class="key-indicator">
+                <div class="key-box" id="keyS">S</div>
+                <span>Backward</span>
+            </div>
+            <div class="key-indicator">
+                <div class="key-box" id="keyD">D</div>
+                <span>Right</span>
+            </div>
+            <div class="key-indicator">
+                <div class="key-box" id="keyShift">Shift</div>
+                <div>
+                    <span>Turbo Mode</span>
+                    <div class="key-label">(Fast speed)</div>
+                </div>
+            </div>
+        </div>
         
         <div class="video-container" id="videoContainer">
             <img id="videoFeed" src="{{ url_for('video_feed') }}" alt="Camera Feed">
@@ -115,17 +254,26 @@
         </div>
         
         <div class="instructions">
-            Press ESC to exit control mode | Move mouse to control head
+            Press ESC to exit control mode | Move mouse to control head | Use WASD to control car
+        </div>
+        
+        <div class="car-controls">
+            <h3>Car Controls (WASD)</h3>
+            <div class="car-buttons">
+                <button class="car-btn" onclick="carControl('forward')" id="btnForward">Forward (W)</button>
+                <button class="car-btn" onclick="carControl('backward')" id="btnBackward">Backward (S)</button>
+                <button class="car-btn" onclick="carControl('left')" id="btnLeft">Left (A)</button>
+                <button class="car-btn" onclick="carControl('right')" id="btnRight">Right (D)</button>
+                <button class="car-btn stop-btn" onclick="carControl('stop')" id="btnStop">Stop</button>
+            </div>
         </div>
         
         <div class="controls">
-            <button onclick="resetPosition()">Reset Position</button>
+            <button onclick="resetPosition()" id="btnReset">Reset Position</button>
             <button id="trackingBtn" class="tracking-btn" onclick="toggleTracking()">
                 Enable Control
             </button>
-            <button class="capture-btn" onclick="captureImage()">
-                Capture Image
-            </button>
+            <button class="capture-btn" onclick="captureImage()" id="btnCapture">Capture Image</button>
         </div>
         
         <div class="status">
@@ -146,9 +294,38 @@
         const trackingBtn = document.getElementById('trackingBtn');
         const controlStatus = document.getElementById('controlStatus');
         
+        // Keyboard elements
+        const keyW = document.getElementById('keyW');
+        const keyA = document.getElementById('keyA');
+        const keyS = document.getElementById('keyS');
+        const keyD = document.getElementById('keyD');
+        const keyShift = document.getElementById('keyShift');
+        
+        // Button elements
+        const btnForward = document.getElementById('btnForward');
+        const btnBackward = document.getElementById('btnBackward');
+        const btnLeft = document.getElementById('btnLeft');
+        const btnRight = document.getElementById('btnRight');
+        const btnStop = document.getElementById('btnStop');
+        const btnReset = document.getElementById('btnReset');
+        const btnCapture = document.getElementById('btnCapture');
+        
+        // Update button states based on tracking
+        function updateButtonStates() {
+            const disabled = !isTracking;
+            btnForward.disabled = disabled;
+            btnBackward.disabled = disabled;
+            btnLeft.disabled = disabled;
+            btnRight.disabled = disabled;
+            btnStop.disabled = disabled;
+            btnReset.disabled = disabled;
+            btnCapture.disabled = disabled;
+        }
+        
         // Event handlers
         document.addEventListener('mousemove', handleMouseMove);
         document.addEventListener('keydown', handleKeyDown);
+        document.addEventListener('keyup', handleKeyUp);
         document.addEventListener('pointerlockchange', handlePointerLockChange);
         document.addEventListener('mozpointerlockchange', handlePointerLockChange);
         document.addEventListener('webkitpointerlockchange', handlePointerLockChange);
@@ -187,9 +364,65 @@
         }
         
         function handleKeyDown(e) {
+            if (!isTracking) return;
+            
+            const key = getKeyFromEvent(e);
+            if (key) {
+                e.preventDefault();
+                sendKeyEvent(key, true, 'press');
+                updateKeyIndicator(key, true);
+            }
+            
+            // Handle ESC to exit control mode
             if (e.key === 'Escape' || e.keyCode === 27) {
                 if (isTracking) {
                     disableTracking();
+                }
+            }
+        }
+        
+        function handleKeyUp(e) {
+            if (!isTracking) return;
+            
+            const key = getKeyFromEvent(e);
+            if (key) {
+                e.preventDefault();
+                sendKeyEvent(key, false, 'release');
+                updateKeyIndicator(key, false);
+            }
+        }
+        
+        function getKeyFromEvent(e) {
+            switch(e.key.toLowerCase()) {
+                case 'w': return 'w';
+                case 'a': return 'a';
+                case 's': return 's';
+                case 'd': return 'd';
+                case 'shift': return 'shift';
+                case 'control': return 'ctrl';
+                default: return null;
+            }
+        }
+        
+        function updateKeyIndicator(key, isActive) {
+            const keyElement = {
+                'w': keyW,
+                'a': keyA,
+                's': keyS,
+                'd': keyD,
+                'shift': keyShift
+            }[key];
+            
+            if (keyElement) {
+                if (isActive) {
+                    keyElement.classList.add('active');
+                    if (key === 'shift') {
+                        keyElement.classList.add('shift');
+                    } else {
+                        keyElement.classList.add('wasd');
+                    }
+                } else {
+                    keyElement.classList.remove('active', 'wasd', 'shift');
                 }
             }
         }
@@ -213,6 +446,8 @@
         }
         
         function resetPosition() {
+            if (!isTracking) return;
+            
             fetch('/api/reset', {
                 method: 'POST'
             })
@@ -225,6 +460,39 @@
             });
         }
         
+        function carControl(action) {
+            if (!isTracking) return;
+            
+            let speed = 0;
+            let steering = 0;
+            
+            switch(action) {
+                case 'forward':
+                    speed = 0.5;
+                    break;
+                case 'backward':
+                    speed = -0.5;
+                    break;
+                case 'left':
+                    steering = -0.5;
+                    break;
+                case 'right':
+                    steering = 0.5;
+                    break;
+                case 'stop':
+                    fetch('/api/car/stop', { method: 'POST' });
+                    return;
+            }
+            
+            fetch('/api/car/control', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ speed: speed, steering: steering })
+            });
+        }
+        
         function toggleTracking() {
             if (isTracking) {
                 disableTracking();
@@ -234,7 +502,7 @@
         }
         
         function enableTracking() {
-            // Request pointer lock on the container, not the image
+            // Request pointer lock on the container
             videoContainer.requestPointerLock = videoContainer.requestPointerLock || 
                                               videoContainer.mozRequestPointerLock ||
                                               videoContainer.webkitRequestPointerLock;
@@ -248,6 +516,9 @@
                 trackingBtn.classList.add('active');
                 controlStatus.textContent = 'Enabled';
                 controlStatus.style.color = 'green';
+                
+                // Enable buttons
+                updateButtonStates();
                 
                 // Notify server
                 fetch('/api/tracking', {
@@ -279,6 +550,19 @@
             controlStatus.textContent = 'Disabled';
             controlStatus.style.color = 'red';
             
+            // Disable buttons
+            updateButtonStates();
+            
+            // Reset key indicators
+            updateKeyIndicator('w', false);
+            updateKeyIndicator('a', false);
+            updateKeyIndicator('s', false);
+            updateKeyIndicator('d', false);
+            updateKeyIndicator('shift', false);
+            
+            // Stop car when disabling control
+            fetch('/api/car/stop', { method: 'POST' });
+            
             // Notify server
             fetch('/api/tracking', {
                 method: 'POST',
@@ -290,6 +574,8 @@
         }
         
         function captureImage() {
+            if (!isTracking) return;
+            
             fetch('/api/capture', {
                 method: 'POST'
             })
@@ -303,6 +589,27 @@
             });
         }
         
+        function sendKeyEvent(key, state, action) {
+            fetch('/api/keyboard', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    key: key,
+                    state: state,
+                    action: action
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (!data.success) {
+                    console.error('Keyboard event error:', data.error);
+                }
+            })
+            .catch(error => console.error('Error sending key event:', error));
+        }
+        
         // Auto-update status
         setInterval(() => {
             fetch('/api/status')
@@ -310,8 +617,20 @@
             .then(data => {
                 posX.textContent = Math.round(data.x);
                 posY.textContent = Math.round(data.y);
+                
+                if (data.tracking_enabled !== isTracking) {
+                    isTracking = data.tracking_enabled;
+                    if (isTracking) {
+                        enableTracking();
+                    } else {
+                        disableTracking();
+                    }
+                }
             });
         }, 1000);
+        
+        // Initialize
+        updateButtonStates();
     </script>
 </body>
 </html>

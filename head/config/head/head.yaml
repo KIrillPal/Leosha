@@ -26,7 +26,3 @@ face:
   max_angle: 110
   zero_angle: 90
   sensitivity: 0.08
-
-pca:
-  channels: 16
-  frequency: 250

@@ -1,6 +1,7 @@
 defaults:
   - head: head
   - camera: camera
+  - car: car
   - _self_
 
 app:
@@ -11,3 +12,7 @@ app:
 output:
   directory: "captured_images"
   save_images: true
+
+pca:
+  channels: 16
+  frequency: 250
