@@ -1,28 +1,21 @@
 # Robot head configuration
 neck:
   channel: 3
-  min_angle: -90
-  max_angle: 90
-  
-
-  range: 0.5
-  max_speed: 300.0
-  sensitivity: 0.1
-  throttle_scale: 0.01
-  start:
-    zero_point: 0.0
-    pwm:
-      min_pulse: 750
-      max_pulse: 2750
-  stop:
-    zero_point: 0.3
-    pwm:
-      min_pulse: 750
-      max_pulse: 2250
+  angle:
+    min: -135
+    max: 135
+    zero: 135
+  pwm:
+    min_pulse: 300
+    max_pulse: 1800
+  range: 360
+  sensitivity: -0.08
 
 face:
   channel: 2
-  min_angle: -15
-  max_angle: 110
-  zero_angle: 90
-  sensitivity: 0.08
+  angle:
+    min: 0
+    max: 125
+    zero: 15
+  range: 180
+  sensitivity: -0.08

@@ -5,11 +5,11 @@ motor:
   speed_to_throttle_ratio: 0.85
   speed:
     normal:
-      forward: 0.25
-      backward: -0.16
+      forward: 0.27
+      backward: -0.22
     fast:
         forward: 0.35
-        backward: -0.2
+        backward: -0.22
     slow:
       forward: 0.1
       backward: -0.1
