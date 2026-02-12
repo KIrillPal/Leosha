@@ -2,10 +2,12 @@ from picamera2 import Picamera2
 from pathlib import Path
 import cv2
 import threading
+import asyncio
 import time
+import numpy as np
 
 class CameraController:
-    """Class for controlling camera and capturing video"""
+    """Class for controlling camera and capturing video."""
     def __init__(self, config, output_dir="captured_images", save_images=True):
         self.config = config
         self.output_dir = Path(output_dir)
@@ -13,7 +15,7 @@ class CameraController:
         self.output_dir.mkdir(exist_ok=True, parents=True)
         
         self.picam2 = Picamera2(tuning=config.tuning_file if config.tuning_file else None)
-        self.frame = None
+        self.frame = np.zeros((480, 640, 3), dtype=np.uint8)
         self.lock = threading.Lock()
         self.running = False
         
@@ -37,41 +39,43 @@ class CameraController:
         self.picam2.start()
         self.running = True
         
-        # Start frame capture thread
-        self.thread = threading.Thread(target=self._capture_loop)
-        self.thread.daemon = True
-        self.thread.start()
+        self._thread = threading.Thread(target=self._run_async_capture_loop)
+        self._thread.daemon = True
+        self._thread.start()
         
-    def _capture_loop(self):
-        """Frame capture loop in background thread"""
+    async def _capture_loop_async(self):
+        """Async capture loop: use asyncio.sleep instead of blocking time.sleep."""
+        loop = asyncio.get_running_loop()
         while self.running:
+            # Run blocking capture in executor so the event loop is not blocked
             frame = self.picam2.capture_array()
-            # Convert from RGB to BGR for OpenCV
             frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
             with self.lock:
                 self.frame = frame
-            time.sleep(1 / self.config.fps)
+            await asyncio.sleep(max(0, 1 / self.config.fps - 0.001))
+        
+    def _run_async_capture_loop(self):
+        """Run the async capture loop in this thread's event loop."""
+        asyncio.run(self._capture_loop_async())
     
     def get_frame(self):
-        """Get current frame"""
+        """Get current frame (copy)."""
         with self.lock:
-            return self.frame
+            return self.frame.copy()
             
     def capture_image(self, filename=None):
-        """Capture and save an image"""
+        """Capture and save an image (uses current buffered frame)."""
         if not self.save_images:
             return
-            
         if filename is None:
             timestamp = int(time.time())
             filename = f"capture_{timestamp}.jpg"
-            
-        frame = self.picam2.capture_array()
-        cv2.imwrite(str(self.output_dir / filename), frame)
+        frame = self.get_frame()
+        if frame is not None:
+            cv2.imwrite(str(self.output_dir / filename), frame)
         
     def stop(self):
-        """Stop camera"""
+        """Stop camera and capture thread."""
         self.running = False
-        if hasattr(self, 'thread') and self.thread.is_alive():
-            self.thread.join()
+        self._thread.join(timeout=2.0)
         self.picam2.stop()

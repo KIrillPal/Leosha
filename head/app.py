@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 
+from pathlib import Path
+
 from adafruit_servokit import ServoKit
 from flask import Flask, render_template, request, jsonify, Response
 import hydra
@@ -13,6 +15,9 @@ from time import sleep
 from modules.head import HeadController
 from modules.camera import CameraController
 from modules.car import Car
+from modules.detector import HumanDetector
+
+_CONFIG_DIR = str(Path(__file__).resolve().parent / "config")
 
 # Global variables for control
 current_x = 0
@@ -33,7 +38,12 @@ key_states = {
 head = None
 camera = None
 car = None
+detector = None
 config = None
+
+# Tracking params (from config, applied when tracking is on)
+tracking_gain = 0.5
+tracking_deadzone = 0.05
 
 app = Flask(__name__)
 
@@ -263,26 +273,64 @@ def handle_ctrl_release():
     update_motor()
         
 
+def _apply_tracking(frame, h, w):
+    """Run detector, draw person boxes, and move head to first person. Returns updated frame."""
+    global current_x, current_y
+    if detector is None:
+        return frame
+    bboxes, first_center = detector.detect_persons(frame)
+    image_cx = w / 2
+    image_cy = h / 2
+    # Draw all person boxes; first one (tracked) in green, rest in blue
+    for i, (x1, y1, x2, y2) in enumerate(bboxes):
+        color = (0, 255, 0) if i == 0 else (255, 165, 0)  # BGR: green = tracked, blue = other
+        thickness = 3 if i == 0 else 2
+        cv2.rectangle(frame, (int(x1), int(y1)), (int(x2), int(y2)), color, thickness)
+        if i == 0:
+            cv2.putText(frame, "tracked", (int(x1), int(y1) - 8),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
+    # Move head to first person
+    if first_center is not None:
+        person_cx, person_cy = first_center
+        error_x = (person_cx - image_cx) / max(w, 1)
+        error_y = (person_cy - image_cy) / max(h, 1)
+        if abs(error_x) >= tracking_deadzone:
+            error_x = error_x
+        else:
+            error_x = 0
+        if abs(error_y) >= tracking_deadzone:
+            error_y = error_y
+        else:
+            error_y = 0
+        dx = error_x * tracking_gain * 1000
+        dy = error_y * tracking_gain * 1000
+        current_x = float(np.clip(current_x + dx, -1000, 1000))
+        current_y = float(np.clip(current_y + dy, -1000, 1000))
+        head.move_neck(dx * float(head.config.neck.sensitivity))
+        head.move_face(dy * float(head.config.face.sensitivity))
+    return frame
+
+
 def generate_frames():
     """Frame generator for video stream"""
+    import time
     while True:
         frame = camera.get_frame()
         if frame is not None:
-            # Draw crosshair at center
             h, w = frame.shape[:2]
+            # Draw crosshair at center
             cv2.line(frame, (w//2, 0), (w//2, h), (0, 255, 0), 2)
             cv2.line(frame, (0, h//2), (w, h//2), (0, 255, 0), 2)
-            
+            # When tracking on: detect persons, draw boxes, move head
+            if tracking_enabled and detector is not None:
+                frame = _apply_tracking(frame, h, w)
             # Encode frame as JPEG
             ret, buffer = cv2.imencode('.jpg', frame)
             frame = buffer.tobytes()
-            
             # Yield frame for streaming
             yield (b'--frame\r\n'
                    b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
         else:
-            # Wait if no frame available
-            import time
             time.sleep(0.1)
 
 @app.route('/video_feed')
@@ -306,20 +354,25 @@ def init_pca(config):
     )
 
 def main(cfg: DictConfig):
-    global head, camera, car, config
-    
-    # Initialize controllers
-    
+    global head, camera, car, detector, config, tracking_gain, tracking_deadzone
+
     config = cfg
+    tracking_gain = float(OmegaConf.select(cfg, "tracking.gain", default=0.5))
+    tracking_deadzone = float(OmegaConf.select(cfg, "tracking.deadzone", default=0.05))
+
     pca = init_pca(cfg)
     head = HeadController(pca, cfg.head)
     head.setup()
-    
+
     camera = CameraController(cfg.camera, cfg.output.directory, cfg.output.save_images)
     camera.setup()
-    
+
     car = Car(pca, cfg.car)
     car.setup()
+
+    model_name = str(OmegaConf.select(cfg, "tracking.model", default="yolov8n.pt"))
+    conf_threshold = float(OmegaConf.select(cfg, "tracking.conf_threshold", default=0.5))
+    detector = HumanDetector(model_name=model_name, conf_threshold=conf_threshold)
     
     print(f"Starting web server on {cfg.app.host}:{cfg.app.port}")
     print("Open http://<your-pi-ip>:5000 in your browser")
@@ -335,6 +388,5 @@ def main(cfg: DictConfig):
         head.set_face_angle(0)
 
 if __name__ == '__main__':
-    # Run with Hydra
-    hydra_main = hydra.main(version_base=None)(main)
+    hydra_main = hydra.main(config_path=_CONFIG_DIR, config_name="config", version_base=None)(main)
     hydra_main()

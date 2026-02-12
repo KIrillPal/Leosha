@@ -4,5 +4,5 @@ exposure_time: 10000
 analogue_gain: 50.0
 awb_enable: true
 ae_enable: false
-fps: 60
+fps: 20
 tuning_file: /usr/share/libcamera/ipa/rpi/pisp/imx290.json

@@ -14,7 +14,7 @@ neck:
 face:
   channel: 2
   angle:
-    min: 0
+    min: -15
     max: 125
     zero: 15
   range: 180
