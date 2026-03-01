@@ -15,7 +15,7 @@ class CameraController:
         self.output_dir.mkdir(exist_ok=True, parents=True)
         
         self.picam2 = Picamera2(tuning=config.tuning_file if config.tuning_file else None)
-        self.frame = np.zeros((480, 640, 3), dtype=np.uint8)
+        self.frame = None
         self.lock = threading.Lock()
         self.running = False
         

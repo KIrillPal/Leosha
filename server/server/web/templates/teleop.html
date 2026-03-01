@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}Телеуправление{% endblock %}
+{% block content %}
+<style>
+    .teleop-root { display: flex; flex-direction: column; height: calc(100vh - 170px); background: white; border: 1px solid #dee2e6; }
+    .teleop-title { text-align: center; padding: 8px; border-bottom: 1px solid #dee2e6; background: #f8f9fa; font-weight: 700; }
+    .video-container { flex: 1; position: relative; overflow: hidden; }
+    #videoFeed { width: 100%; height: 100%; object-fit: contain; }
+    #centerDot { position: absolute; width: 8px; height: 8px; background: rgba(255, 0, 0, 0.7); border-radius: 50%; display: none; transform: translate(-50%, -50%); left: 50%; top: 50%; z-index: 100; }
+    .keyboard-status { position: absolute; top: 8px; left: 8px; background: rgba(255,255,255,0.9); border-radius: 8px; padding: 8px; z-index: 50; }
+    .key-row { display: flex; align-items: center; gap: 8px; margin: 4px 0; }
+    .key-box { width: 30px; height: 30px; border: 2px solid #ccc; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-weight: 700; background: #f8f9fa; }
+    .key-box.active.wasd { background: #ff6b35; border-color: #ff6b35; color: white; }
+    .key-box.active.shift { background: #007bff; border-color: #007bff; color: white; }
+    .panel { display: flex; flex-wrap: wrap; gap: 8px; padding: 8px; border-top: 1px solid #dee2e6; background: #f8f9fa; align-items: center; }
+    button { padding: 8px 12px; border: none; border-radius: 6px; color: white; background: #007bff; cursor: pointer; }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .stop-btn { background: #dc3545; }
+    .tracking-btn { background: #28a745; }
+    .tracking-btn.active { background: #dc3545; }
+</style>
+<div class="teleop-root">
+    <div class="teleop-title">Robot Head & Car Control</div>
+    <div class="video-container" id="videoContainer">
+        <img id="videoFeed" src="{{ url_for('video_feed') }}" alt="Camera Feed"><div id="centerDot"></div>
+        <div class="keyboard-status">
+            <div class="key-row"><div class="key-box" id="keyW">W</div><span>Forward</span></div>
+            <div class="key-row"><div class="key-box" id="keyA">A</div><span>Left</span></div>
+            <div class="key-row"><div class="key-box" id="keyS">S</div><span>Backward</span></div>
+            <div class="key-row"><div class="key-box" id="keyD">D</div><span>Right</span></div>
+            <div class="key-row"><div class="key-box" id="keyShift">Shift</div><span>Turbo</span></div>
+        </div>
+    </div>
+    <div class="panel">
+        <button onclick="carControl('forward')" id="btnForward">Forward (W)</button>
+        <button onclick="carControl('backward')" id="btnBackward">Backward (S)</button>
+        <button onclick="carControl('left')" id="btnLeft">Left (A)</button>
+        <button onclick="carControl('right')" id="btnRight">Right (D)</button>
+        <button onclick="carControl('stop')" id="btnStop" class="stop-btn">Stop</button>
+        <button onclick="resetPosition()" id="btnReset">Reset Head</button>
+        <button id="trackingBtn" class="tracking-btn" onclick="toggleTracking()">Enable Control</button>
+        <button onclick="captureImage()" id="btnCapture">Capture Image</button>
+        <span>Position: X=<span id="posX">0</span> Y=<span id="posY">0</span> | <span id="controlStatus">Disabled</span></span>
+    </div>
+</div>
+<script>
+let isTracking=false,isPointerLocked=false;
+const videoContainer=document.getElementById('videoContainer'),videoFeed=document.getElementById('videoFeed'),centerDot=document.getElementById('centerDot');
+const trackingBtn=document.getElementById('trackingBtn'),controlStatus=document.getElementById('controlStatus');
+const keyMap={w:keyW,a:keyA,s:keyS,d:keyD,shift:keyShift};
+const btns=[btnForward,btnBackward,btnLeft,btnRight,btnStop,btnReset,btnCapture];
+const updateButtonStates=()=>btns.forEach(b=>b.disabled=!isTracking);
+const updateKeyIndicator=(k,a)=>{const el=keyMap[k];if(!el)return;a?(el.classList.add('active'),el.classList.add(k==='shift'?'shift':'wasd')):el.classList.remove('active','shift','wasd');};
+const getKeyFromEvent=(e)=>{const k=e.key.toLowerCase();return ['w','a','s','d','shift','control'].includes(k)?(k==='control'?'ctrl':k):null;};
+const sendKeyEvent=(key,state)=>fetch('/api/keyboard',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key,state,action:state?'press':'release'})});
+async function updatePosition(dx,dy){const d=await (await fetch('/api/position',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({dx,dy})})).json();if(d.success){posX.textContent=Math.round(d.x);posY.textContent=Math.round(d.y);}}
+async function resetPosition(){if(!isTracking)return;const d=await (await fetch('/api/reset',{method:'POST'})).json();if(d.success){posX.textContent=d.x;posY.textContent=d.y;}}
+async function carControl(a){if(!isTracking)return;if(a==='stop'){await fetch('/api/car/stop',{method:'POST'});return;}let speed=0,steering=0;if(a==='forward')speed=0.5;if(a==='backward')speed=-0.5;if(a==='left')steering=-0.5;if(a==='right')steering=0.5;await fetch('/api/car/control',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({speed,steering})});}
+async function captureImage(){if(isTracking)await fetch('/api/capture',{method:'POST'});}
+const setTracking=(tracking)=>fetch('/api/tracking',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tracking})});
+function enableTracking(){const req=videoContainer.requestPointerLock||videoContainer.mozRequestPointerLock||videoContainer.webkitRequestPointerLock;if(!req)return;req.call(videoContainer);isTracking=true;trackingBtn.textContent='Disable Control';trackingBtn.classList.add('active');controlStatus.textContent='Enabled';controlStatus.style.color='green';updateButtonStates();setTracking(true);}
+function disableTracking(){const exit=document.exitPointerLock||document.mozExitPointerLock||document.webkitExitPointerLock;if(exit)exit.call(document);isTracking=false;trackingBtn.textContent='Enable Control';trackingBtn.classList.remove('active');controlStatus.textContent='Disabled';controlStatus.style.color='red';updateButtonStates();['w','a','s','d','shift'].forEach(k=>updateKeyIndicator(k,false));fetch('/api/car/stop',{method:'POST'});setTracking(false);}
+function toggleTracking(){isTracking?disableTracking():enableTracking();}
+function handlePointerLockChange(){isPointerLocked=(document.pointerLockElement===videoContainer||document.mozPointerLockElement===videoContainer||document.webkitPointerLockElement===videoContainer);centerDot.style.display=isPointerLocked?'block':'none';videoFeed.style.cursor=isPointerLocked?'none':'default';if(!isPointerLocked&&isTracking)disableTracking();}
+document.addEventListener('pointerlockchange',handlePointerLockChange);document.addEventListener('mozpointerlockchange',handlePointerLockChange);document.addEventListener('webkitpointerlockchange',handlePointerLockChange);
+document.addEventListener('mousemove',e=>{if(isTracking&&isPointerLocked){const dx=e.movementX||0,dy=e.movementY||0;if(dx||dy)updatePosition(dx,dy);}});
+document.addEventListener('keydown',e=>{if(!isTracking)return;const key=getKeyFromEvent(e);if(key){e.preventDefault();sendKeyEvent(key,true);updateKeyIndicator(key,true);}if(e.key==='Escape')disableTracking();});
+document.addEventListener('keyup',e=>{if(!isTracking)return;const key=getKeyFromEvent(e);if(key){e.preventDefault();sendKeyEvent(key,false);updateKeyIndicator(key,false);}});
+setInterval(async()=>{const d=await (await fetch('/api/status')).json();posX.textContent=Math.round(d.x);posY.textContent=Math.round(d.y);},1000);
+updateButtonStates();
+</script>
+{% endblock %}

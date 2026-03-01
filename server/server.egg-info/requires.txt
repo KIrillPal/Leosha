@@ -1,0 +1,7 @@
+Flask>=2.2
+PyYAML>=6.0
+numpy>=1.24
+setuptools
+
+[test]
+pytest>=7.0

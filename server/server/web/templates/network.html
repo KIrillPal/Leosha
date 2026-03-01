@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Сеть{% endblock %}
+{% block content %}
+<div class="grid">
+    <div class="card">
+        <h3>Онлайн метрики</h3>
+        <p>RSSI: <span class="metric" id="rssi">-</span> dBm</p>
+        <p>Latency: <span class="metric" id="latency">-</span> ms</p>
+        <p>TX: <span class="metric" id="txBps">-</span> B/s, <span id="txPps">-</span> pkt/s</p>
+        <p>RX: <span class="metric" id="rxBps">-</span> B/s, <span id="rxPps">-</span> pkt/s</p>
+    </div>
+    <div class="card">
+        <h3>Grafana</h3>
+        <label for="grafanaUrl">URL панели Grafana</label>
+        <input type="text" id="grafanaUrl" value="{{ grafana_url }}" placeholder="http://localhost:3000/d/...">
+        <div style="margin-top:10px;"><button onclick="embedGrafana()">Показать iframe</button></div>
+        <p class="hint">Если URL не задан, остаются только встроенные метрики.</p>
+    </div>
+</div>
+<div class="card" id="grafanaWrap" style="display:none;"><iframe id="grafanaFrame" style="width:100%;height:450px;border:none;"></iframe></div>
+<script>
+async function refreshNetworkStats(){const d=await (await fetch('/api/network/stats')).json();rssi.textContent=d.rssi_dbm;latency.textContent=d.latency_ms;txBps.textContent=d.tx_bytes_per_sec;rxBps.textContent=d.rx_bytes_per_sec;txPps.textContent=d.tx_packets_per_sec;rxPps.textContent=d.rx_packets_per_sec;}
+function embedGrafana(){const url=grafanaUrl.value.trim();if(!url)return;grafanaFrame.src=url;grafanaWrap.style.display='block';}
+if (grafanaUrl.value.trim()) embedGrafana();
+refreshNetworkStats();setInterval(refreshNetworkStats,1000);
+</script>
+{% endblock %}

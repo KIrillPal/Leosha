@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}Настройки{% endblock %}
+{% block content %}
+<div class="grid">
+    <div class="card">
+        <label for="ipInput">IP адрес робота</label>
+        <input id="ipInput" type="text" placeholder="192.168.1.50">
+        <div style="margin-top:10px; display:flex; gap:8px;">
+            <button onclick="saveIp()">Сохранить IP</button>
+            <button class="secondary" onclick="pingRobot()">Ping</button>
+        </div>
+        <p class="hint" id="ipStatus">Статус: неизвестно</p>
+    </div>
+    <div class="card">
+        <label for="modeSelect">Режим работы</label>
+        <select id="modeSelect">
+            <option value="pause">pause</option>
+            <option value="teleoperation">teleoperation</option>
+            <option value="autonomy_profile_1">autonomy_profile_1</option>
+        </select>
+        <div style="margin-top:10px;"><button onclick="setMode()">Применить режим</button></div>
+        <p class="hint" id="modeStatus">Текущий режим: -</p>
+    </div>
+</div>
+<script>
+async function loadSettings() {
+    const data = await (await fetch('/api/settings')).json();
+    ipInput.value = data.ip || '';
+    modeSelect.value = data.mode || 'pause';
+    modeStatus.textContent = `Текущий режим: ${data.mode}`;
+    ipStatus.textContent = `Статус: ${data.connected ? 'подключен' : 'нет подключения'}; ping=${data.last_ping_ms ?? '-'} ms`;
+}
+async function saveIp() {
+    const r = await fetch('/api/settings/ip', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ip: ipInput.value.trim()})});
+    const d = await r.json(); if (!d.success) alert(d.error || 'Ошибка'); await loadSettings();
+}
+async function pingRobot() {
+    const d = await (await fetch('/api/ping', {method:'POST'})).json();
+    ipStatus.textContent = d.success ? `Статус: подключен; ping=${d.ping_ms} ms` : 'Статус: нет подключения';
+}
+async function setMode() {
+    const r = await fetch('/api/mode', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({mode: modeSelect.value})});
+    const d = await r.json(); if (!d.success) alert(d.error || 'Ошибка'); await loadSettings();
+}
+loadSettings();
+</script>
+{% endblock %}

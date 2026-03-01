@@ -1,0 +1,16 @@
+app:
+  host: "127.0.0.1"
+  port: 8080
+  command_hz: 100.0
+
+robot:
+  ip: "127.0.0.1"
+
+control:
+  max_speed_normal: 0.45
+  max_speed_fast: 0.75
+  max_steering: 0.65
+  head_sensitivity: 0.002
+
+network:
+  grafana_url: ""
