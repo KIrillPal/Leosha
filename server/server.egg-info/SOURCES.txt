@@ -5,6 +5,7 @@ setup.py
 config/server.yaml
 launch/server.launch.py
 resource/server
+scripts/server
 server/__init__.py
 server/config.py
 server/interfaces.py
@@ -14,7 +15,6 @@ server/ros_node.py
 server.egg-info/PKG-INFO
 server.egg-info/SOURCES.txt
 server.egg-info/dependency_links.txt
-server.egg-info/entry_points.txt
 server.egg-info/not-zip-safe
 server.egg-info/requires.txt
 server.egg-info/top_level.txt
@@ -29,3 +29,7 @@ server/web/templates/base.html
 server/web/templates/network.html
 server/web/templates/settings.html
 server/web/templates/teleop.html
+tests/test_algorithms.py
+tests/test_config.py
+tests/test_controller_service.py
+tests/test_web_api.py
