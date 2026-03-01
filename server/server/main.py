@@ -32,7 +32,7 @@ def build_runtime(config_path: str):
 def main() -> None:
     parser = argparse.ArgumentParser(description="Server runtime (ROS2 package)")
     parser.add_argument("--config", default=default_config_path(), help="Путь к YAML конфигу")
-    args = parser.parse_args()
+    args, _ = parser.parse_known_args()  # unknown args (e.g. --ros-args) передаются launch'ем
 
     cfg, app, controller, robot = build_runtime(args.config)
     ros_bridge = Ros2ServerBridge()

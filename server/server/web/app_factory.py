@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from time import sleep
 
 from flask import Flask, Response, jsonify, redirect, render_template, request, url_for
@@ -11,7 +12,14 @@ from ..services.robot_client import RobotClient
 
 
 def create_app(controller: ControllerService, robot_client: RobotClient, config: ServerConfig) -> Flask:
-    app = Flask(__name__, template_folder="templates")
+    try:
+        from ament_index_python.packages import get_package_share_directory
+        _share = get_package_share_directory("server")
+        _share_templates = os.path.join(_share, "templates")
+        template_folder = _share_templates if os.path.exists(_share_templates) else "templates"
+    except Exception:
+        template_folder = "templates"
+    app = Flask(__name__, template_folder=template_folder)
 
     @app.get("/")
     def index():

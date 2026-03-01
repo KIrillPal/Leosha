@@ -1,7 +1,22 @@
 from setuptools import setup, find_packages
+from setuptools.command.install_scripts import install_scripts
 
 
 package_name = "server"
+
+
+class install_scripts_with_env_shebang(install_scripts):
+    """После установки подменяем shebang на #!/usr/bin/env python3 для conda/venv."""
+
+    def run(self):
+        super().run()
+        for path in self.outfiles:
+            with open(path, "r", encoding="utf-8") as f:
+                lines = f.readlines()
+            if lines and lines[0].startswith("#!") and "env" not in lines[0]:
+                lines[0] = "#!/usr/bin/env python3\n"
+                with open(path, "w", encoding="utf-8") as f:
+                    f.writelines(lines)
 
 
 setup(
@@ -24,6 +39,7 @@ setup(
         "setuptools",
         "Flask>=2.2",
         "numpy>=1.24",
+        "Pillow>=9.0",
         "PyYAML>=6.0",
     ],
     extras_require={
@@ -37,9 +53,6 @@ setup(
     description="ROS2 сервер управления роботом с YAML-конфигом, web GUI и mock-клиентом.",
     license="MIT",
     tests_require=["pytest"],
-    entry_points={
-        "console_scripts": [
-            "server = server.main:main",
-        ],
-    },
+    scripts=["scripts/server"],
+    cmdclass={"install_scripts": install_scripts_with_env_shebang},
 )

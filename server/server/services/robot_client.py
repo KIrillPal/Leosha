@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import base64
+import io
 import math
 import random
 import threading
@@ -8,7 +8,19 @@ from dataclasses import dataclass
 from time import monotonic, sleep
 from typing import Protocol
 
+import numpy as np
+from PIL import Image
+
 from ..models import ControlCommand, NetworkStats, RobotConnectionStatus, TelemetryFrame
+
+
+def _make_black_frame_jpeg(width: int = 320, height: int = 240) -> bytes:
+    """Чёрный кадр как массив, сжатый в JPEG."""
+    arr = np.zeros((height, width, 3), dtype=np.uint8)
+    img = Image.fromarray(arr, mode="RGB")
+    buf = io.BytesIO()
+    img.save(buf, format="JPEG", quality=85)
+    return buf.getvalue()
 
 
 class RobotClient(Protocol):
@@ -31,15 +43,7 @@ class _Counters:
 
 
 class MockRobotClient:
-    _FRAME_JPEG = base64.b64decode(
-        b"/9j/4AAQSkZJRgABAQAAAQABAAD/2wCEAAoHBwgHBgoICAoKCgkLDhgQDQwMDRsUFRAWIB0iIiAd"
-        b"HysjIh0oHR8fJDUkKCwuMjIyGiQ7QDszPy40NTEBDAwMEA8QHxISHzQhJCE0NDQ0NDQ0NDQ0NDQ0NDQ0"
-        b"NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NP/AABEIAAEAAQMBIgACEQEDEQH/xAAVAAEBAAAA"
-        b"AAAAAAAAAAAAAAABAv/EABQBAQAAAAAAAAAAAAAAAAAAAAD/2gAMAwEAAhADEAAAAaAf/8QAFBABAAAA"
-        b"AAAAAAAAAAAAAAAAAP/aAAgBAQABBQJf/8QAFBEBAAAAAAAAAAAAAAAAAAAAIP/aAAgBAwEBPwFH/8QA"
-        b"FBEBAAAAAAAAAAAAAAAAAAAAIP/aAAgBAgEBPwFH/8QAFBABAAAAAAAAAAAAAAAAAAAAIP/aAAgBAQAG"
-        b"PwJf/8QAFBABAAAAAAAAAAAAAAAAAAAAIP/aAAgBAQABPyFf/9k="
-    )
+    _FRAME_JPEG = _make_black_frame_jpeg()
 
     def __init__(self, ip: str = "127.0.0.1") -> None:
         self._status = RobotConnectionStatus(ip=ip, connected=True, last_ping_ms=1.2)

@@ -51,17 +51,20 @@ def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any
 
 
 def load_server_config(path: str | Path) -> ServerConfig:
-    default_path = Path(__file__).resolve().parent.parent / "config" / "server.yaml"
-    with default_path.open("r", encoding="utf-8") as f:
-        defaults = yaml.safe_load(f) or {}
-
     custom_path = Path(path)
-    if custom_path != default_path and custom_path.exists():
-        with custom_path.open("r", encoding="utf-8") as f:
-            loaded = yaml.safe_load(f) or {}
-        data = _deep_merge(defaults, loaded)
+    default_path = Path(__file__).resolve().parent.parent / "config" / "server.yaml"
+
+    if custom_path.exists():
+        config_path = custom_path
+    elif default_path.exists():
+        config_path = default_path
     else:
-        data = defaults
+        raise FileNotFoundError(
+            f"Config not found: {custom_path} (from --config) or {default_path} (default)"
+        )
+
+    with config_path.open("r", encoding="utf-8") as f:
+        data = yaml.safe_load(f) or {}
 
     return ServerConfig(
         app=AppSection(**data["app"]),

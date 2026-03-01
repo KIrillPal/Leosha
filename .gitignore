@@ -5,3 +5,8 @@
 **/.lgd-nfy0
 **/.hydra
 **/*.log
+
+# colcon
+build
+install
+log
