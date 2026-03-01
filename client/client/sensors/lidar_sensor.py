@@ -1,0 +1,213 @@
+from __future__ import annotations
+
+import math
+import threading
+from time import monotonic, monotonic_ns, sleep
+
+from ..models import LaserScan
+from .base import HealthcheckResult
+
+
+def _angle_in_sector(angle_deg: float, start_deg: float, end_deg: float) -> bool:
+    """Проверка принадлежности угла сектору с поддержкой перехода через -180/180."""
+    a = ((angle_deg + 180.0) % 360.0) - 180.0
+    s = ((start_deg + 180.0) % 360.0) - 180.0
+    e = ((end_deg + 180.0) % 360.0) - 180.0
+    if s <= e:
+        return s <= a <= e
+    return a >= s or a <= e
+
+
+class TMiniProPlusLidarThread(threading.Thread):
+    """Поток реального лидара YDLidar T-mini Pro Plus через SDK ydlidar."""
+
+    def __init__(self, lidar_cfg, geometry_cfg, sensor_hub, stats, statuses, stop_event) -> None:
+        super().__init__(daemon=True)
+        self._cfg = lidar_cfg
+        self._geometry = geometry_cfg
+        self._hub = sensor_hub
+        self._stats = stats
+        self._statuses = statuses
+        self._stop_event = stop_event
+        self._laser = None
+        self._sdk = None
+        self._failures = 0
+
+    def healthcheck(self, timeout_sec: float | None = None) -> HealthcheckResult:
+        sensor_name = "lidar"
+        if not self._cfg.enabled:
+            return HealthcheckResult(sensor_name=sensor_name, ok=False, latency_ms=0.0, reason="disabled_in_config")
+        timeout = float(timeout_sec or self._cfg.healthcheck_timeout_sec)
+        t_start = monotonic()
+        laser = None
+        try:
+            import ydlidar  # type: ignore
+
+            laser = ydlidar.CYdLidar()
+            selected_port = self._resolve_port(ydlidar)
+            self._apply_lidar_options(laser, ydlidar, selected_port)
+            if not laser.initialize():
+                raise RuntimeError("ydlidar initialize failed")
+            if not laser.turnOn():
+                raise RuntimeError("ydlidar turnOn failed")
+            last_scan = None
+            while (monotonic() - t_start) < timeout:
+                scan_obj = ydlidar.LaserScan()
+                ok = laser.doProcessSimple(scan_obj)
+                if ok and scan_obj.points:
+                    last_scan = self._to_laserscan(scan_obj)
+                    if len(last_scan.ranges) >= int(self._cfg.healthcheck_min_points):
+                        return HealthcheckResult(
+                            sensor_name=sensor_name,
+                            ok=True,
+                            latency_ms=(monotonic() - t_start) * 1000.0,
+                            details={
+                                "scan": last_scan,
+                                "points": len(last_scan.ranges),
+                                "port": selected_port,
+                            },
+                        )
+                sleep(0.02)
+            points = len(last_scan.ranges) if last_scan is not None else 0
+            return HealthcheckResult(
+                sensor_name=sensor_name,
+                ok=False,
+                latency_ms=(monotonic() - t_start) * 1000.0,
+                reason="not_enough_points",
+                details={"points": points},
+            )
+        except Exception as exc:
+            return HealthcheckResult(
+                sensor_name=sensor_name,
+                ok=False,
+                latency_ms=(monotonic() - t_start) * 1000.0,
+                reason=str(exc),
+            )
+        finally:
+            if laser is not None:
+                try:
+                    laser.turnOff()
+                    laser.disconnecting()
+                except Exception:
+                    pass
+
+    def run(self) -> None:
+        name = "lidar"
+        if not self._cfg.enabled:
+            self._statuses.mark_disabled(name, "disabled_in_config")
+            return
+        try:
+            import ydlidar  # type: ignore
+
+            self._sdk = ydlidar
+            laser = ydlidar.CYdLidar()
+            selected_port = self._resolve_port(ydlidar)
+            self._apply_lidar_options(laser, ydlidar, selected_port)
+            if not laser.initialize():
+                raise RuntimeError("ydlidar initialize failed")
+            if not laser.turnOn():
+                raise RuntimeError("ydlidar turnOn failed")
+            self._laser = laser
+        except Exception as exc:
+            self._statuses.mark_failure(name, f"init_failed: {exc}")
+            if self._cfg.fail_policy.auto_disable_on_fail:
+                self._statuses.mark_disabled(name, "init_failed")
+            return
+
+        period = 1.0 / max(1.0, float(self._cfg.scan_hz))
+        while not self._stop_event.is_set():
+            cycle_start = monotonic_ns()
+            read_start = monotonic_ns()
+            try:
+                scan_obj = self._sdk.LaserScan()
+                ok = self._laser.doProcessSimple(scan_obj)
+                if not ok or not scan_obj.points:
+                    raise RuntimeError("empty lidar scan")
+                scan = self._to_laserscan(scan_obj)
+                read_end = monotonic_ns()
+                self._hub.put_scan(scan)
+                self._statuses.mark_ok(name)
+                self._failures = 0
+                self._stats.record(name, read_end - read_start, monotonic_ns() - cycle_start)
+            except Exception as exc:
+                self._failures += 1
+                self._statuses.mark_failure(name, str(exc))
+                self._stats.record(name, monotonic_ns() - read_start, monotonic_ns() - cycle_start, is_error=True)
+                if self._failures >= self._cfg.fail_policy.max_consecutive_failures and self._cfg.fail_policy.auto_disable_on_fail:
+                    self._statuses.mark_disabled(name, "too_many_failures")
+                    break
+                sleep(max(0.05, float(self._cfg.fail_policy.retry_interval_sec)))
+                continue
+            sleep(max(0.0, period - (monotonic_ns() - cycle_start) / 1e9))
+
+        if self._laser is not None:
+            try:
+                self._laser.turnOff()
+                self._laser.disconnecting()
+            except Exception:
+                pass
+
+    def _to_laserscan(self, scan_obj) -> LaserScan:
+        points = sorted(scan_obj.points, key=lambda p: p.angle)
+        if len(points) < 2:
+            raise RuntimeError("not enough points")
+        if bool(self._cfg.invert_angle):
+            angles = [-float(p.angle) for p in points]
+        else:
+            angles = [float(p.angle) for p in points]
+        ranges = [float(p.range) for p in points]
+        intensities = [float(getattr(p, "intensity", 0.0)) for p in points]
+
+        blind = self._geometry.lidar.blind_zone
+        filtered_ranges = []
+        for angle_rad, dist in zip(angles, ranges):
+            angle_deg = math.degrees(angle_rad)
+            if _angle_in_sector(angle_deg, blind.angle_start_deg, blind.angle_end_deg) and dist <= blind.max_distance_m:
+                filtered_ranges.append(float("inf"))
+            else:
+                filtered_ranges.append(dist)
+
+        diffs = [angles[i + 1] - angles[i] for i in range(len(angles) - 1)]
+        diffs = [d for d in diffs if d > 0]
+        angle_increment = sum(diffs) / len(diffs) if diffs else 0.01
+        return LaserScan(
+            timestamp_ns=monotonic_ns(),
+            angle_min=angles[0],
+            angle_max=angles[-1],
+            angle_increment=angle_increment,
+            range_min=float(self._cfg.range_min_m),
+            range_max=float(self._cfg.range_max_m),
+            ranges=filtered_ranges,
+            intensities=intensities,
+        )
+
+    def _resolve_port(self, ydlidar_module) -> str:
+        if not bool(self._cfg.auto_discover_port):
+            return str(self._cfg.port)
+        try:
+            ports = ydlidar_module.lidarPortList()
+            if isinstance(ports, dict):
+                for _, value in ports.items():
+                    if value:
+                        return str(value)
+        except Exception:
+            pass
+        return str(self._cfg.port)
+
+    def _apply_lidar_options(self, laser, ydlidar_module, selected_port: str) -> None:
+        laser.setlidaropt(ydlidar_module.LidarPropSerialPort, selected_port)
+        laser.setlidaropt(ydlidar_module.LidarPropSerialBaudrate, int(self._cfg.baudrate))
+        laser.setlidaropt(ydlidar_module.LidarPropLidarType, ydlidar_module.TYPE_TRIANGLE)
+        laser.setlidaropt(ydlidar_module.LidarPropDeviceType, ydlidar_module.YDLIDAR_TYPE_SERIAL)
+        laser.setlidaropt(ydlidar_module.LidarPropScanFrequency, float(self._cfg.scan_hz))
+        laser.setlidaropt(ydlidar_module.LidarPropSampleRate, 4)
+        laser.setlidaropt(ydlidar_module.LidarPropSingleChannel, False)
+        laser.setlidaropt(ydlidar_module.LidarPropMaxRange, float(self._cfg.range_max_m))
+        laser.setlidaropt(ydlidar_module.LidarPropMinRange, float(self._cfg.range_min_m))
+        if hasattr(ydlidar_module, "LidarPropMaxAngle"):
+            laser.setlidaropt(ydlidar_module.LidarPropMaxAngle, float(self._cfg.max_angle_deg))
+        if hasattr(ydlidar_module, "LidarPropMinAngle"):
+            laser.setlidaropt(ydlidar_module.LidarPropMinAngle, float(self._cfg.min_angle_deg))
+        if hasattr(ydlidar_module, "LidarPropIntenstiy"):
+            laser.setlidaropt(ydlidar_module.LidarPropIntenstiy, bool(self._cfg.intensity_enabled))
+

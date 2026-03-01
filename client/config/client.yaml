@@ -1,0 +1,152 @@
+app:
+  telemetry_hz: 30.0
+  command_hz: 100.0
+
+watchdog:
+  warn_ms: 50.0
+  timeout_ms: 100.0
+  critical_ms: 500.0
+
+diagnostics:
+  battery_voltage: 11.8
+  cpu_temp_c: 56.0
+  wifi_rssi_dbm: -44.0
+
+network:
+  server_host: "127.0.0.1"
+  telemetry_port: 5550
+  command_port: 5552
+  report_port: 5553
+  recv_timeout_ms: 0
+  send_high_water_mark: 2
+  recv_high_water_mark: 1
+
+actuators:
+  backend: "mock"  # "mock" | "pca9685"
+  pca:
+    channels: 16
+    frequency: 250
+  motor:
+    channel: 0
+    zero_throttle: 0.05
+    speed_to_throttle_ratio: 0.85
+    pwm_min_pulse: 1000
+    pwm_max_pulse: 2000
+  wheel:
+    channel: 1
+    min_throttle: -1.0
+    zero_throttle: 0.15
+    max_throttle: 0.92
+    pwm_min_pulse: 1000
+    pwm_max_pulse: 2000
+    invert: true
+  neck:
+    channel: 3
+    angle_min: -135.0
+    angle_max: 135.0
+    angle_zero: 135.0
+    actuation_range: 360
+    pwm_min_pulse: 300
+    pwm_max_pulse: 1800
+  face:
+    channel: 2
+    angle_min: -15.0
+    angle_max: 125.0
+    angle_zero: 15.0
+    actuation_range: 180
+    pwm_min_pulse: 0
+    pwm_max_pulse: 0
+
+robot_geometry:
+  body_size:
+    length: 0.34
+    width: 0.24
+    height: 0.18
+  pose_on_body:
+    x: 0.0
+    y: 0.0
+    z: 0.0
+  wheel:
+    radius: 0.032
+    width: 0.026
+  lidar:
+    position:
+      x: 0.08
+      y: 0.0
+      z: 0.12
+    blind_zone:
+      angle_start_deg: -30.0
+      angle_end_deg: 30.0
+      max_distance_m: 0.35
+  head:
+    position:
+      x: 0.12
+      y: 0.0
+      z: 0.17
+    neck_min_deg: -70.0
+    neck_max_deg: 70.0
+    face_min_deg: -45.0
+    face_max_deg: 45.0
+
+sensors:
+  camera:
+    enabled: false
+    required_for_motion: false
+    fps: 30.0
+    resolution: [640, 480]
+    tuning_file: "/usr/share/libcamera/ipa/rpi/vc4/imx290.json"
+    exposure_time: 8000
+    analogue_gain: 2.0
+    awb_enable: false
+    ae_enable: false
+    jpeg_quality: 70
+    healthcheck_timeout_sec: 2.5
+    healthcheck_min_frames: 2
+    fail_policy:
+      max_consecutive_failures: 3
+      auto_disable_on_fail: true
+      retry_interval_sec: 1.0
+  lidar:
+    enabled: false
+    required_for_motion: true
+    port: "/dev/ydlidar"
+    auto_discover_port: true
+    baudrate: 230400
+    scan_hz: 10.0
+    min_angle_deg: -180.0
+    max_angle_deg: 180.0
+    range_min_m: 0.02
+    range_max_m: 12.0
+    intensity_enabled: true
+    invert_angle: true
+    healthcheck_timeout_sec: 3.0
+    healthcheck_min_points: 32
+    fail_policy:
+      max_consecutive_failures: 3
+      auto_disable_on_fail: true
+      retry_interval_sec: 1.0
+  imu:
+    enabled: true
+    hz: 100.0
+    required_for_motion: false
+    fail_policy:
+      max_consecutive_failures: 10
+      auto_disable_on_fail: false
+      retry_interval_sec: 0.2
+  encoder:
+    enabled: true
+    hz: 100.0
+    required_for_motion: false
+    fail_policy:
+      max_consecutive_failures: 10
+      auto_disable_on_fail: false
+      retry_interval_sec: 0.2
+  ultrasonic:
+    enabled: true
+    hz: 10.0
+    emergency_stop_distance_m: 0.2
+    required_for_motion: true
+    fail_policy:
+      max_consecutive_failures: 5
+      auto_disable_on_fail: false
+      retry_interval_sec: 0.5

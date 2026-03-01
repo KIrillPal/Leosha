@@ -1,0 +1,20 @@
+Metadata-Version: 2.4
+Name: client
+Version: 0.1.0
+Summary: Клиент робота: потоки сенсоров, SensorHub, watchdog и сетевой мост.
+Maintainer: Leosha Dev
+Maintainer-email: dev@example.com
+License: MIT
+Requires-Dist: setuptools
+Requires-Dist: PyYAML>=6.0
+Requires-Dist: msgpack>=1.0
+Requires-Dist: numpy>=1.24
+Requires-Dist: pyzmq>=25.0
+Provides-Extra: test
+Requires-Dist: pytest>=7.0; extra == "test"
+Dynamic: license
+Dynamic: maintainer
+Dynamic: maintainer-email
+Dynamic: provides-extra
+Dynamic: requires-dist
+Dynamic: summary
