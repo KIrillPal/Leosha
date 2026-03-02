@@ -138,6 +138,7 @@ python -m server --config /path/to/Leosha/code/configs/server.yaml
 | `ae_enable` | bool | Автоэкспозиция |
 | `jpeg_quality` | int | Качество JPEG (1–100) |
 | `healthcheck_timeout_sec` | float | Таймаут healthcheck (с) |
+| `healthcheck_test_timeout_sec` | float | Макс. время ожидания теста (с), включая блокирующий init |
 | `healthcheck_min_frames` | int | Минимум кадров для успешного healthcheck |
 
 ### sensors.lidar
@@ -155,6 +156,7 @@ python -m server --config /path/to/Leosha/code/configs/server.yaml
 | `intensity_enabled` | bool | Включить интенсивность |
 | `invert_angle` | bool | Инвертировать углы (T-mini Pro Plus) |
 | `healthcheck_timeout_sec` | float | Таймаут healthcheck (с) |
+| `healthcheck_test_timeout_sec` | float | Макс. время ожидания теста (с), включая блокирующий init |
 | `healthcheck_min_points` | int | Минимум точек для успешного healthcheck |
 
 ### sensors.imu / sensors.encoder

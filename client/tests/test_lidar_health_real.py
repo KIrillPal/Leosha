@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import threading
 from pathlib import Path
 
 import pytest
@@ -17,6 +18,7 @@ def test_lidar_healthcheck_real(require_hardware, hardware_config):
     cfg = hardware_config.sensors.lidar
     if not cfg.enabled:
         pytest.skip("lidar disabled in hardware config")
+    test_timeout = float(cfg.healthcheck_test_timeout_sec)
     statuses = SensorStatusRegistry()
     statuses.register("lidar", True)
     stats = StatsCollector()
@@ -27,9 +29,19 @@ def test_lidar_healthcheck_real(require_hardware, hardware_config):
         SensorHub(),
         stats,
         statuses,
-        stop_event=__import__("threading").Event(),
+        stop_event=threading.Event(),
     )
-    result = thread.healthcheck()
+    result_holder = []
+
+    def run_healthcheck():
+        result_holder.append(thread.healthcheck(timeout_sec=float(cfg.healthcheck_timeout_sec)))
+
+    t = threading.Thread(target=run_healthcheck, daemon=True)
+    t.start()
+    t.join(timeout=test_timeout)
+    if not result_holder:
+        pytest.fail(f"lidar healthcheck did not finish within {test_timeout}s (init or scan blocked)")
+    result = result_holder[0]
     assert result.ok, f"lidar healthcheck failed: {result.reason}"
     scan = result.details.get("scan")
     assert scan is not None

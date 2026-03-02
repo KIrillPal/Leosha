@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import threading
 from pathlib import Path
 
 import pytest
@@ -17,12 +18,23 @@ def test_camera_healthcheck_real(require_hardware, hardware_config):
     cfg = hardware_config.sensors.camera
     if not cfg.enabled:
         pytest.skip("camera disabled in hardware config")
+    test_timeout = float(cfg.healthcheck_test_timeout_sec)
     statuses = SensorStatusRegistry()
     statuses.register("camera", True)
     stats = StatsCollector()
     stats.register("camera", cfg.fps)
-    thread = CameraSensorThread(cfg, SensorHub(), stats, statuses, stop_event=__import__("threading").Event())
-    result = thread.healthcheck()
+    thread = CameraSensorThread(cfg, SensorHub(), stats, statuses, stop_event=threading.Event())
+    result_holder = []
+
+    def run_healthcheck():
+        result_holder.append(thread.healthcheck(timeout_sec=float(cfg.healthcheck_timeout_sec)))
+
+    t = threading.Thread(target=run_healthcheck, daemon=True)
+    t.start()
+    t.join(timeout=test_timeout)
+    if not result_holder:
+        pytest.fail(f"camera healthcheck did not finish within {test_timeout}s (init or capture blocked)")
+    result = result_holder[0]
     assert result.ok, f"camera healthcheck failed: {result.reason}"
     frame_jpeg = result.details.get("frame_jpeg", b"")
     assert isinstance(frame_jpeg, (bytes, bytearray)) and len(frame_jpeg) > 16

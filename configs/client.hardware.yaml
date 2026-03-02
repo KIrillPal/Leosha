@@ -100,7 +100,8 @@ sensors:
     awb_enable: true
     ae_enable: false
     jpeg_quality: 70
-    healthcheck_timeout_sec: 2.5
+    healthcheck_timeout_sec: 5.0
+    healthcheck_test_timeout_sec: 5.0
     healthcheck_min_frames: 2
     fail_policy:
       max_consecutive_failures: 3
@@ -119,7 +120,8 @@ sensors:
     range_max_m: 5.0
     intensity_enabled: true
     invert_angle: true
-    healthcheck_timeout_sec: 3.0
+    healthcheck_timeout_sec: 10.0
+    healthcheck_test_timeout_sec: 15.0
     healthcheck_min_points: 32
     fail_policy:
       max_consecutive_failures: 3

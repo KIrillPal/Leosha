@@ -2,7 +2,7 @@ README.md
 package.xml
 setup.cfg
 setup.py
-config/server.yaml
+/home/KIR/Leosha/code/configs/server.yaml
 launch/server.launch.py
 resource/server
 scripts/server

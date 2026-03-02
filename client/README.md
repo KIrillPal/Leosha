@@ -102,3 +102,5 @@ export LEOSHA_HARDWARE_CONFIG=/home/KIR/Leosha/code/client/config/client.hardwar
 pytest -m hardware -q
 ```
 
+Переменные только **включают** выполнение hardware-тестов. Результат **skip** (а не pass) — когда устройство недоступно: нет камеры/прав на `/dev/media*`, нет лидара на `/dev/ydlidar`. Чтобы увидеть причину пропуска: `pytest -m hardware -v -rs`. Для камеры нужен conda-env **leo** (или окружение с системным pykms).
+

@@ -73,6 +73,13 @@ class CameraSensorThread(threading.Thread):
                 reason="not_enough_frames",
                 details={"frames": frames},
             )
+        except IndexError as exc:
+            return HealthcheckResult(
+                sensor_name=sensor_name,
+                ok=False,
+                latency_ms=(monotonic() - t_start) * 1000.0,
+                reason="no_camera_found (check /dev/media* permissions or connect camera)",
+            )
         except Exception as exc:
             return HealthcheckResult(
                 sensor_name=sensor_name,

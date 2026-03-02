@@ -101,6 +101,7 @@ sensors:
     ae_enable: false
     jpeg_quality: 70
     healthcheck_timeout_sec: 2.5
+    healthcheck_test_timeout_sec: 60.0
     healthcheck_min_frames: 2
     fail_policy:
       max_consecutive_failures: 3
@@ -120,6 +121,7 @@ sensors:
     intensity_enabled: true
     invert_angle: true
     healthcheck_timeout_sec: 3.0
+    healthcheck_test_timeout_sec: 30.0
     healthcheck_min_points: 32
     fail_policy:
       max_consecutive_failures: 3

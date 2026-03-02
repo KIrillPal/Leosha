@@ -176,6 +176,10 @@ def test_lidar_sensor_thread_writes_map_artifact(monkeypatch, client_config):
     cfg.sensors.lidar.scan_hz = 8.0
     cfg.sensors.lidar.fail_policy.max_consecutive_failures = 3
     cfg.sensors.lidar.fail_policy.auto_disable_on_fail = True
+    # Blind zone covering fake points at ~±11.5° (rad -0.2..0.2) with r=0.2 so they become inf
+    cfg.robot_geometry.lidar.blind_zone.angle_start_deg = -15.0
+    cfg.robot_geometry.lidar.blind_zone.angle_end_deg = 15.0
+    cfg.robot_geometry.lidar.blind_zone.max_distance_m = 0.5
 
     class _Point:
         def __init__(self, angle, dist, intensity):
@@ -215,9 +219,17 @@ def test_lidar_sensor_thread_writes_map_artifact(monkeypatch, client_config):
         def disconnecting(self):
             return None
 
+    def _lidar_port_list():
+        return {}
+
+    def _os_init():
+        pass
+
     fake_yd = types.SimpleNamespace(
         CYdLidar=_FakeLidar,
         LaserScan=_LaserScan,
+        os_init=_os_init,
+        lidarPortList=_lidar_port_list,
         LidarPropSerialPort=1,
         LidarPropSerialBaudrate=2,
         LidarPropLidarType=3,
@@ -225,8 +237,11 @@ def test_lidar_sensor_thread_writes_map_artifact(monkeypatch, client_config):
         LidarPropScanFrequency=5,
         LidarPropSampleRate=6,
         LidarPropSingleChannel=7,
+        LidarPropMaxAngle=12,
+        LidarPropMinAngle=13,
         LidarPropMaxRange=8,
         LidarPropMinRange=9,
+        LidarPropIntenstiy=14,
         TYPE_TRIANGLE=10,
         YDLIDAR_TYPE_SERIAL=11,
     )

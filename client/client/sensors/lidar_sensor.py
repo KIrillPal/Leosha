@@ -43,11 +43,7 @@ class TMiniProPlusLidarThread(threading.Thread):
         try:
             import ydlidar  # type: ignore
 
-            laser = ydlidar.CYdLidar()
-            selected_port = self._resolve_port(ydlidar)
-            self._apply_lidar_options(laser, ydlidar, selected_port)
-            if not laser.initialize():
-                raise RuntimeError("ydlidar initialize failed")
+            laser, selected_port = self._create_and_init_lidar(ydlidar)
             if not laser.turnOn():
                 raise RuntimeError("ydlidar turnOn failed")
             last_scan = None
@@ -100,11 +96,7 @@ class TMiniProPlusLidarThread(threading.Thread):
             import ydlidar  # type: ignore
 
             self._sdk = ydlidar
-            laser = ydlidar.CYdLidar()
-            selected_port = self._resolve_port(ydlidar)
-            self._apply_lidar_options(laser, ydlidar, selected_port)
-            if not laser.initialize():
-                raise RuntimeError("ydlidar initialize failed")
+            laser, _ = self._create_and_init_lidar(ydlidar)
             if not laser.turnOn():
                 raise RuntimeError("ydlidar turnOn failed")
             self._laser = laser
@@ -181,33 +173,30 @@ class TMiniProPlusLidarThread(threading.Thread):
             intensities=intensities,
         )
 
-    def _resolve_port(self, ydlidar_module) -> str:
-        if not bool(self._cfg.auto_discover_port):
-            return str(self._cfg.port)
-        try:
-            ports = ydlidar_module.lidarPortList()
-            if isinstance(ports, dict):
-                for _, value in ports.items():
-                    if value:
-                        return str(value)
-        except Exception:
-            pass
-        return str(self._cfg.port)
-
-    def _apply_lidar_options(self, laser, ydlidar_module, selected_port: str) -> None:
-        laser.setlidaropt(ydlidar_module.LidarPropSerialPort, selected_port)
-        laser.setlidaropt(ydlidar_module.LidarPropSerialBaudrate, int(self._cfg.baudrate))
-        laser.setlidaropt(ydlidar_module.LidarPropLidarType, ydlidar_module.TYPE_TRIANGLE)
-        laser.setlidaropt(ydlidar_module.LidarPropDeviceType, ydlidar_module.YDLIDAR_TYPE_SERIAL)
-        laser.setlidaropt(ydlidar_module.LidarPropScanFrequency, float(self._cfg.scan_hz))
-        laser.setlidaropt(ydlidar_module.LidarPropSampleRate, 4)
-        laser.setlidaropt(ydlidar_module.LidarPropSingleChannel, False)
-        laser.setlidaropt(ydlidar_module.LidarPropMaxRange, float(self._cfg.range_max_m))
-        laser.setlidaropt(ydlidar_module.LidarPropMinRange, float(self._cfg.range_min_m))
-        if hasattr(ydlidar_module, "LidarPropMaxAngle"):
-            laser.setlidaropt(ydlidar_module.LidarPropMaxAngle, float(self._cfg.max_angle_deg))
-        if hasattr(ydlidar_module, "LidarPropMinAngle"):
-            laser.setlidaropt(ydlidar_module.LidarPropMinAngle, float(self._cfg.min_angle_deg))
-        if hasattr(ydlidar_module, "LidarPropIntenstiy"):
-            laser.setlidaropt(ydlidar_module.LidarPropIntenstiy, bool(self._cfg.intensity_enabled))
+    def _create_and_init_lidar(self, ydlidar):
+        """Create CYdLidar, set options (same order as plot_tminiplus_test.py), initialize. Returns (laser, port)."""
+        
+        ydlidar.os_init()
+        ports = ydlidar.lidarPortList()
+        port = "/dev/ydlidar"
+        for key, value in ports.items():
+            port = value
+            print("Found LiDAR port:", port)
+        # Create laser and set options in exact order as plot_tminiplus_test.py (config values)
+        laser = ydlidar.CYdLidar()
+        laser.setlidaropt(ydlidar.LidarPropSerialPort, port)
+        laser.setlidaropt(ydlidar.LidarPropSerialBaudrate, int(self._cfg.baudrate))
+        laser.setlidaropt(ydlidar.LidarPropLidarType, ydlidar.TYPE_TRIANGLE)
+        laser.setlidaropt(ydlidar.LidarPropDeviceType, ydlidar.YDLIDAR_TYPE_SERIAL)
+        laser.setlidaropt(ydlidar.LidarPropScanFrequency, float(self._cfg.scan_hz))
+        laser.setlidaropt(ydlidar.LidarPropSampleRate, 4)
+        laser.setlidaropt(ydlidar.LidarPropSingleChannel, False)
+        laser.setlidaropt(ydlidar.LidarPropMaxAngle, float(self._cfg.max_angle_deg))
+        laser.setlidaropt(ydlidar.LidarPropMinAngle, float(self._cfg.min_angle_deg))
+        laser.setlidaropt(ydlidar.LidarPropMaxRange, float(self._cfg.range_max_m))
+        laser.setlidaropt(ydlidar.LidarPropMinRange, float(self._cfg.range_min_m))
+        laser.setlidaropt(ydlidar.LidarPropIntenstiy, bool(self._cfg.intensity_enabled))
+        if not laser.initialize():
+            raise RuntimeError("ydlidar initialize failed")
+        return laser, port
 

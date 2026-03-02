@@ -96,6 +96,7 @@ class CameraConfig:
     ae_enable: bool = False
     jpeg_quality: int = 70
     healthcheck_timeout_sec: float = 2.5
+    healthcheck_test_timeout_sec: float = 60.0  # max time test waits for healthcheck (incl. blocking init)
     healthcheck_min_frames: int = 2
     fail_policy: SensorFailPolicy = field(default_factory=SensorFailPolicy)
 
@@ -115,6 +116,7 @@ class LidarConfig:
     intensity_enabled: bool = True
     invert_angle: bool = True
     healthcheck_timeout_sec: float = 3.0
+    healthcheck_test_timeout_sec: float = 30.0  # max time test waits for healthcheck (incl. blocking init)
     healthcheck_min_points: int = 32
     fail_policy: SensorFailPolicy = field(default_factory=SensorFailPolicy)
 
@@ -325,6 +327,7 @@ def load_client_config(path: str) -> ClientConfig:
                 ae_enable=bool(camera_raw.get("ae_enable", False)),
                 jpeg_quality=int(camera_raw.get("jpeg_quality", 70)),
                 healthcheck_timeout_sec=float(camera_raw.get("healthcheck_timeout_sec", 2.5)),
+                healthcheck_test_timeout_sec=float(camera_raw.get("healthcheck_test_timeout_sec", 60.0)),
                 healthcheck_min_frames=int(camera_raw.get("healthcheck_min_frames", 2)),
                 fail_policy=_fail_policy(camera_raw.get("fail_policy")),
             ),
@@ -342,6 +345,7 @@ def load_client_config(path: str) -> ClientConfig:
                 intensity_enabled=bool(lidar_raw.get("intensity_enabled", True)),
                 invert_angle=bool(lidar_raw.get("invert_angle", True)),
                 healthcheck_timeout_sec=float(lidar_raw.get("healthcheck_timeout_sec", 3.0)),
+                healthcheck_test_timeout_sec=float(lidar_raw.get("healthcheck_test_timeout_sec", 30.0)),
                 healthcheck_min_points=int(lidar_raw.get("healthcheck_min_points", 32)),
                 fail_policy=_fail_policy(lidar_raw.get("fail_policy")),
             ),
