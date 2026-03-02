@@ -10,8 +10,8 @@ import zlib
 from pathlib import Path
 
 from client.sensor_hub import SensorHub
-from client.sensors.camera_sensor import CameraSensorThread
-from client.sensors.lidar_sensor import TMiniProPlusLidarThread
+from client.sensors.camera import CameraSensorThread
+from client.sensors.lidar import TMiniProPlusLidarThread
 from client.sensors.status_registry import SensorStatusRegistry
 from client.stats import StatsCollector
 
@@ -75,7 +75,7 @@ def _render_lidar_map_png(path: Path, ranges: list[float], angle_min: float, ang
     _write_png_rgb(path, width, height, bytes(img))
 
 
-def test_camera_sensor_thread_writes_frame_artifact(monkeypatch, client_config):
+def test_camera_thread_writes_frame_artifact(monkeypatch, client_config):
     cfg = copy.deepcopy(client_config)
     cfg.sensors.camera.enabled = True
     cfg.sensors.camera.fail_policy.max_consecutive_failures = 3
@@ -170,7 +170,7 @@ def test_camera_sensor_thread_writes_frame_artifact(monkeypatch, client_config):
     assert artifact_path.stat().st_size > 100
 
 
-def test_lidar_sensor_thread_writes_map_artifact(monkeypatch, client_config):
+def test_lidar_thread_writes_map_artifact(monkeypatch, client_config):
     cfg = copy.deepcopy(client_config)
     cfg.sensors.lidar.enabled = True
     cfg.sensors.lidar.scan_hz = 8.0

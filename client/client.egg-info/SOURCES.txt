@@ -33,8 +33,8 @@ client/network/mock_server.py
 client/network/serialization.py
 client/sensors/__init__.py
 client/sensors/base.py
-client/sensors/camera_sensor.py
-client/sensors/lidar_sensor.py
+client/sensors/camera.py
+client/sensors/lidar.py
 client/sensors/status_registry.py
 resource/client
 tests/test_actuator_driver.py

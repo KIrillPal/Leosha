@@ -1,7 +1,7 @@
 """Потоки сенсоров."""
 
-from .camera_sensor import CameraSensorThread
-from .lidar_sensor import TMiniProPlusLidarThread
+from .camera import CameraSensorThread
+from .lidar import TMiniProPlusLidarThread
 from .base import HealthcheckResult
 from .status_registry import SensorStatusRegistry
 

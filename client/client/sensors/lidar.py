@@ -199,4 +199,3 @@ class TMiniProPlusLidarThread(threading.Thread):
         if not laser.initialize():
             raise RuntimeError("ydlidar initialize failed")
         return laser, port
-

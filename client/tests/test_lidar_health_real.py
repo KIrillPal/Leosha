@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from client.sensor_hub import SensorHub
-from client.sensors.lidar_sensor import TMiniProPlusLidarThread
+from client.sensors.lidar import TMiniProPlusLidarThread
 from client.sensors.status_registry import SensorStatusRegistry
 from client.stats import StatsCollector
 

@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from client.sensor_hub import SensorHub
-from client.sensors.camera_sensor import CameraSensorThread
+from client.sensors.camera import CameraSensorThread
 from client.sensors.status_registry import SensorStatusRegistry
 from client.stats import StatsCollector
 

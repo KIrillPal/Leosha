@@ -161,4 +161,3 @@ class CameraSensorThread(threading.Thread):
                 self._camera.stop()
             except Exception:
                 pass
-
