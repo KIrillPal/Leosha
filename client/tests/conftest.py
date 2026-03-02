@@ -12,9 +12,14 @@ from client.network.mock_server import MockServerConfig
 from client.runtime import ClientRuntime
 
 
+def _configs_dir() -> Path:
+    """Папка configs: code/configs (из code/client/tests на 2 уровня вверх = code)."""
+    return Path(__file__).resolve().parents[2] / "configs"
+
+
 @pytest.fixture
 def client_config():
-    cfg_path = Path(__file__).resolve().parent.parent / "config" / "client.yaml"
+    cfg_path = _configs_dir() / "client.yaml"
     return load_client_config(str(cfg_path))
 
 
@@ -24,7 +29,7 @@ def hardware_config():
     if cfg_env:
         cfg_path = Path(cfg_env)
     else:
-        cfg_path = Path(__file__).resolve().parent.parent / "config" / "client.hardware.yaml"
+        cfg_path = _configs_dir() / "client.hardware.yaml"
     return load_client_config(str(cfg_path))
 
 

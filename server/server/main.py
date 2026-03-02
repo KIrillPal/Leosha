@@ -11,8 +11,13 @@ from .services.robot_client import MockRobotClient
 from .web.app_factory import create_app
 
 
+def _configs_dir() -> Path:
+    """Папка configs рядом с server: code/configs (из code/server/server/ на 2 уровня вверх = code)."""
+    return Path(__file__).resolve().parents[2] / "configs"
+
+
 def default_config_path() -> str:
-    return str(Path(__file__).resolve().parent.parent / "config" / "server.yaml")
+    return str(_configs_dir() / "server.yaml")
 
 
 def build_runtime(config_path: str):

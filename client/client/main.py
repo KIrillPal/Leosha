@@ -10,8 +10,13 @@ from .network import InMemoryBridge, MockServer, ZmqBridge
 from .runtime import ClientRuntime
 
 
+def _configs_dir() -> Path:
+    """Папка configs рядом с client: code/configs (из code/client/client/ на 2 уровня вверх = code)."""
+    return Path(__file__).resolve().parents[2] / "configs"
+
+
 def default_config_path() -> str:
-    return str(Path(__file__).resolve().parent.parent / "config" / "client.yaml")
+    return str(_configs_dir() / "client.yaml")
 
 
 def main() -> None:

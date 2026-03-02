@@ -50,9 +50,14 @@ def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any
     return result
 
 
+def _configs_dir() -> Path:
+    """Папка configs рядом с server: code/configs (из code/server/server/ на 2 уровня вверх = code)."""
+    return Path(__file__).resolve().parents[2] / "configs"
+
+
 def load_server_config(path: str | Path) -> ServerConfig:
     custom_path = Path(path)
-    default_path = Path(__file__).resolve().parent.parent / "config" / "server.yaml"
+    default_path = _configs_dir() / "server.yaml"
 
     if custom_path.exists():
         config_path = custom_path

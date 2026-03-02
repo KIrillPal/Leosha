@@ -11,9 +11,14 @@ from server.services.robot_client import MockRobotClient
 from server.web.app_factory import create_app
 
 
+def _configs_dir() -> Path:
+    """Папка configs: code/configs (из code/server/tests на 2 уровня вверх = code)."""
+    return Path(__file__).resolve().parents[2] / "configs"
+
+
 @pytest.fixture()
 def runtime():
-    cfg_path = Path(__file__).resolve().parents[1] / "config" / "server.yaml"
+    cfg_path = _configs_dir() / "server.yaml"
     cfg = load_server_config(cfg_path)
     robot = MockRobotClient(ip=cfg.robot.ip)
     context = AlgorithmContext(

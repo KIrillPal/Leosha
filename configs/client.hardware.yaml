@@ -22,26 +22,18 @@ network:
   recv_high_water_mark: 1
 
 actuators:
-  # TODO: "pca9685" для реального робота, "mock" для сухого прогона.
   backend: "pca9685"
   pca:
-    # Обычно 16 каналов PCA9685.
     channels: 16
-    # В проекте head используется 250 Гц.
     frequency: 250
   motor:
-    # Канал мотора (из head/config/car/car.yaml)
     channel: 0
-    # TODO: калибровка нулевого throttle для ESC/мотора
     zero_throttle: 0.05
-    # TODO: коэффициент speed -> throttle
     speed_to_throttle_ratio: 0.85
     pwm_min_pulse: 1000
     pwm_max_pulse: 2000
   wheel:
-    # Канал рулевого сервопривода
     channel: 1
-    # TODO: границы рулевого throttle после калибровки
     min_throttle: -1.0
     zero_throttle: 0.15
     max_throttle: 0.92
@@ -49,9 +41,7 @@ actuators:
     pwm_max_pulse: 2000
     invert: true
   neck:
-    # Канал шеи (yaw)
     channel: 3
-    # TODO: реальные механические ограничения шеи
     angle_min: -135.0
     angle_max: 135.0
     angle_zero: 135.0
@@ -59,17 +49,13 @@ actuators:
     pwm_min_pulse: 300
     pwm_max_pulse: 1800
   face:
-    # Канал головы/камеры (pitch)
     channel: 2
-    # TODO: реальные механические ограничения pitch
     angle_min: -15.0
     angle_max: 125.0
     angle_zero: 15.0
     actuation_range: 180
-    # В head-конфиге для face PWM явно не задан.
-    # TODO: при необходимости задать калиброванные значения > 0.
-    pwm_min_pulse: 0
-    pwm_max_pulse: 0
+    pwm_min_pulse: 300
+    pwm_max_pulse: 1800
 
 robot_geometry:
   body_size:
@@ -85,22 +71,22 @@ robot_geometry:
     width: 0.025
   lidar:
     position:
-      x: 0.08 # примерное значение
-      y: 0.0 # примерное значение
-      z: 0.12 # примерное значение
+      x: 0.08
+      y: 0.0
+      z: 0.12
     blind_zone:
       angle_start_deg: 0.0
       angle_end_deg: 0.0
       max_distance_m: 0.12
   head:
     position:
-      x: 0.12 # примерное значение
-      y: 0.0 # примерное значение
-      z: 0.17 # примерное значение
-    neck_min_deg: -270.0  # примерное значение
-    neck_max_deg: 270.0  # примерное значение
-    face_min_deg: -20.0  # примерное значение
-    face_max_deg: 90.0  # примерное значение
+      x: 0.12
+      y: 0.0
+      z: 0.17
+    neck_min_deg: -270.0
+    neck_max_deg: 270.0
+    face_min_deg: -20.0
+    face_max_deg: 90.0
 
 sensors:
   camera:
@@ -120,14 +106,12 @@ sensors:
       max_consecutive_failures: 3
       auto_disable_on_fail: true
       retry_interval_sec: 1.0
-
   lidar:
     enabled: true
     required_for_motion: true
-    # По рабочему скрипту используется /dev/ydlidar, плюс автопоиск из lidarPortList.
     port: "/dev/ydlidar"
     auto_discover_port: true
-    baudrate: 230400 # примерное значение
+    baudrate: 230400
     scan_hz: 10.0
     min_angle_deg: -180.0
     max_angle_deg: 180.0
@@ -141,7 +125,6 @@ sensors:
       max_consecutive_failures: 3
       auto_disable_on_fail: true
       retry_interval_sec: 1.0
-
   imu:
     enabled: true
     required_for_motion: false
@@ -150,7 +133,6 @@ sensors:
       max_consecutive_failures: 10
       auto_disable_on_fail: false
       retry_interval_sec: 0.2
-
   encoder:
     enabled: true
     required_for_motion: false
@@ -159,7 +141,6 @@ sensors:
       max_consecutive_failures: 10
       auto_disable_on_fail: false
       retry_interval_sec: 0.2
-
   ultrasonic:
     enabled: true
     required_for_motion: true
