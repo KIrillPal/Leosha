@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import threading
 from time import monotonic_ns, sleep
 
@@ -19,6 +20,8 @@ from .sensor_hub import SensorHub
 from .sensors import CameraSensorThread, SensorStatusRegistry, TMiniProPlusLidarThread
 from .stats import StatsCollector
 from .watchdog import Watchdog
+
+LOGGER = logging.getLogger(__name__)
 
 
 class ClientRuntime:
@@ -41,6 +44,7 @@ class ClientRuntime:
         self._seq = 0
         self._lock = threading.Lock()
         self._last_gyro_z = 0.0
+        self._last_status: RobotStatus | None = None
         self._stop = threading.Event()
         self._threads: list[threading.Thread] = []
         self._executors = {
@@ -81,6 +85,7 @@ class ClientRuntime:
 
     def start(self) -> None:
         if self._threads:
+            LOGGER.warning("ClientRuntime.start() ignored: threads already running")
             return
         self._stop.clear()
         self._threads = [
@@ -106,6 +111,7 @@ class ClientRuntime:
         ]
         for t in self._threads:
             t.start()
+        LOGGER.info("Client runtime started with %d worker threads", len(self._threads))
 
     def stop(self) -> None:
         self._stop.set()
@@ -115,6 +121,7 @@ class ClientRuntime:
         close_fn = getattr(self.bridge, "close", None)
         if callable(close_fn):
             close_fn()
+        LOGGER.info("Client runtime stopped")
 
     def _mock_i2c_loop(self) -> None:
         period = 1.0 / max(1.0, self.config.sensors.imu.hz)
@@ -159,6 +166,7 @@ class ClientRuntime:
         period = 1.0 / max(1.0, self.config.sensors.ultrasonic.hz)
         if not self.config.sensors.ultrasonic.enabled:
             self.sensor_statuses.mark_disabled("ultrasonic", "disabled_in_config")
+            LOGGER.info("Ultrasonic loop disabled by config")
             return
         while not self._stop.is_set():
             t0 = monotonic_ns()
@@ -220,6 +228,11 @@ class ClientRuntime:
             status = self.watchdog.status()
             if self._must_stop_by_sensor_status():
                 status = RobotStatus.EMERGENCY_STOP
+            if status != self._last_status:
+                LOGGER.info("Client runtime status changed: %s -> %s", self._last_status, status)
+                if status == RobotStatus.EMERGENCY_STOP:
+                    LOGGER.warning("Emergency stop active (watchdog or required sensors)")
+                self._last_status = status
             self.state.set_status(status)
             if status in (RobotStatus.WAITING_FOR_SERVER, RobotStatus.EMERGENCY_STOP):
                 self.actuators.emergency_stop()

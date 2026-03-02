@@ -1,13 +1,17 @@
 from __future__ import annotations
 
 import argparse
+import logging
 from pathlib import Path
 from time import sleep
 
 from .actuators import MockActuatorDriver, Pca9685ActuatorDriver
 from .config import load_client_config
+from .logging_setup import configure_pipeline_logging
 from .network import InMemoryBridge, MockServer, ZmqBridge
 from .runtime import ClientRuntime
+
+LOGGER = logging.getLogger(__name__)
 
 
 def _configs_dir() -> Path:
@@ -20,6 +24,7 @@ def default_config_path() -> str:
 
 
 def main() -> None:
+    log_path = configure_pipeline_logging("client_pipeline")
     parser = argparse.ArgumentParser(description="Leosha client runtime")
     parser.add_argument("--config", default=default_config_path(), help="Путь к YAML конфигу")
     parser.add_argument("--duration-sec", type=float, default=5.0, help="Длительность демо запуска")
@@ -30,6 +35,7 @@ def main() -> None:
         help="Транспорт до сервера: mock или реальный zmq",
     )
     args = parser.parse_args()
+    LOGGER.info("Starting client pipeline | config=%s transport=%s log_file=%s", args.config, args.transport, log_path)
 
     config = load_client_config(args.config)
     if args.transport == "mock":
@@ -55,6 +61,7 @@ def main() -> None:
         sleep(max(0.1, args.duration_sec))
     finally:
         runtime.stop()
+        LOGGER.info("Client pipeline stopped")
 
 
 if __name__ == "__main__":

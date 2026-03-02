@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import threading
 from dataclasses import dataclass
 from time import monotonic, sleep
@@ -8,6 +9,8 @@ from ..algorithms import AutonomyProfile1, PauseProfile, TeleoperationProfile
 from ..interfaces import AlgorithmContext, OperationProfile
 from ..models import ControlCommand, ControlMode, ManualInputState, TelemetryFrame
 from .robot_client import RobotClient
+
+LOGGER = logging.getLogger(__name__)
 
 
 @dataclass
@@ -48,9 +51,11 @@ class ControllerService:
         mode = ControlMode(mode_raw)
         with self._lock:
             if mode != self._active_mode:
+                prev_mode = self._active_mode
                 self._profiles[self._active_mode].algorithm.on_exit(self._context)
                 self._profiles[mode].algorithm.on_enter(self._context)
                 self._active_mode = mode
+                LOGGER.info("Control mode changed: %s -> %s", prev_mode.value, mode.value)
         return mode
 
     def set_tracking(self, enabled: bool) -> None:
@@ -108,6 +113,7 @@ class ControllerService:
 
     def start_command_loop(self, hz: float) -> None:
         if self._loop_thread and self._loop_thread.is_alive():
+            LOGGER.warning("Controller command loop already running")
             return
         self._loop_stop.clear()
         period = 1.0 / hz
@@ -121,8 +127,10 @@ class ControllerService:
 
         self._loop_thread = threading.Thread(target=_loop, daemon=True)
         self._loop_thread.start()
+        LOGGER.info("Controller command loop started at %.2f Hz", hz)
 
     def stop_command_loop(self) -> None:
         self._loop_stop.set()
         if self._loop_thread and self._loop_thread.is_alive():
             self._loop_thread.join(timeout=1.0)
+        LOGGER.info("Controller command loop stopped")

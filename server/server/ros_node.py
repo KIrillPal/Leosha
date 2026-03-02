@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import logging
+
+LOGGER = logging.getLogger(__name__)
+
 
 class Ros2ServerBridge:
     """Минимальный ROS2 bridge-слой (без обязательного rclpy в тестах)."""
@@ -14,10 +18,12 @@ class Ros2ServerBridge:
             from rclpy.node import Node
         except Exception:
             self._enabled = False
+            LOGGER.info("ROS2 bridge disabled: rclpy not available")
             return
         rclpy.init(args=None)
         self._node = Node("server_bridge")
         self._enabled = True
+        LOGGER.info("ROS2 bridge started")
 
     def stop(self) -> None:
         if not self._enabled:
@@ -29,3 +35,4 @@ class Ros2ServerBridge:
         if self._node is not None:
             self._node.destroy_node()
         rclpy.shutdown()
+        LOGGER.info("ROS2 bridge stopped")

@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import logging
 import math
 import threading
 from time import monotonic, monotonic_ns, sleep
 
 from ..models import LaserScan
 from .base import HealthcheckResult
+
+LOGGER = logging.getLogger(__name__)
 
 
 def _angle_in_sector(angle_deg: float, start_deg: float, end_deg: float) -> bool:
@@ -91,6 +94,7 @@ class TMiniProPlusLidarThread(threading.Thread):
         name = "lidar"
         if not self._cfg.enabled:
             self._statuses.mark_disabled(name, "disabled_in_config")
+            LOGGER.info("Lidar sensor disabled by config")
             return
         try:
             import ydlidar  # type: ignore
@@ -102,8 +106,10 @@ class TMiniProPlusLidarThread(threading.Thread):
             self._laser = laser
         except Exception as exc:
             self._statuses.mark_failure(name, f"init_failed: {exc}")
+            LOGGER.error("Lidar initialization failed: %s", exc)
             if self._cfg.fail_policy.auto_disable_on_fail:
                 self._statuses.mark_disabled(name, "init_failed")
+                LOGGER.warning("Lidar sensor auto-disabled after init failure")
             return
 
         period = 1.0 / max(1.0, float(self._cfg.scan_hz))
@@ -127,6 +133,7 @@ class TMiniProPlusLidarThread(threading.Thread):
                 self._stats.record(name, monotonic_ns() - read_start, monotonic_ns() - cycle_start, is_error=True)
                 if self._failures >= self._cfg.fail_policy.max_consecutive_failures and self._cfg.fail_policy.auto_disable_on_fail:
                     self._statuses.mark_disabled(name, "too_many_failures")
+                    LOGGER.error("Lidar sensor auto-disabled after %d consecutive failures", self._failures)
                     break
                 sleep(max(0.05, float(self._cfg.fail_policy.retry_interval_sec)))
                 continue
@@ -138,6 +145,7 @@ class TMiniProPlusLidarThread(threading.Thread):
                 self._laser.disconnecting()
             except Exception:
                 pass
+        LOGGER.info("Lidar sensor thread stopped")
 
     def _to_laserscan(self, scan_obj) -> LaserScan:
         points = sorted(scan_obj.points, key=lambda p: p.angle)
@@ -181,7 +189,7 @@ class TMiniProPlusLidarThread(threading.Thread):
         port = "/dev/ydlidar"
         for key, value in ports.items():
             port = value
-            print("Found LiDAR port:", port)
+            LOGGER.info("Found LiDAR port: %s", port)
         # Create laser and set options in exact order as plot_tminiplus_test.py (config values)
         laser = ydlidar.CYdLidar()
         laser.setlidaropt(ydlidar.LidarPropSerialPort, port)

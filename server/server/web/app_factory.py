@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import os
 from time import sleep
 
@@ -9,6 +10,8 @@ from ..config import ServerConfig
 from ..models import ControlMode
 from ..services.controller_service import ControllerService
 from ..services.robot_client import RobotClient
+
+LOGGER = logging.getLogger(__name__)
 
 
 def create_app(controller: ControllerService, robot_client: RobotClient, config: ServerConfig) -> Flask:
@@ -20,6 +23,7 @@ def create_app(controller: ControllerService, robot_client: RobotClient, config:
     except Exception:
         template_folder = "templates"
     app = Flask(__name__, template_folder=template_folder)
+    LOGGER.info("Web app created | template_folder=%s", template_folder)
 
     @app.get("/")
     def index():
@@ -69,6 +73,7 @@ def create_app(controller: ControllerService, robot_client: RobotClient, config:
         if not ip:
             return jsonify({"success": False, "error": "IP не задан"}), 400
         robot_client.set_ip(ip)
+        LOGGER.info("Robot IP updated to %s", ip)
         return jsonify({"success": True, "ip": ip})
 
     @app.post("/api/ping")
@@ -86,6 +91,7 @@ def create_app(controller: ControllerService, robot_client: RobotClient, config:
             mode = controller.set_mode(mode_raw)
             return jsonify({"success": True, "mode": mode.value})
         except ValueError:
+            LOGGER.warning("Rejected unknown mode: %s", mode_raw)
             return jsonify({"success": False, "error": f"Неизвестный режим: {mode_raw}"}), 400
 
     @app.post("/api/position")

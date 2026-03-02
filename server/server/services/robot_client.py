@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import logging
 import math
 import random
 import threading
@@ -12,6 +13,8 @@ import numpy as np
 from PIL import Image
 
 from ..models import ControlCommand, NetworkStats, RobotConnectionStatus, TelemetryFrame
+
+LOGGER = logging.getLogger(__name__)
 
 
 def _make_black_frame_jpeg(width: int = 320, height: int = 240) -> bytes:
@@ -55,10 +58,12 @@ class MockRobotClient:
         self._network = NetworkStats(latency_ms=1.5, rssi_dbm=-42.0)
         self._thread = threading.Thread(target=self._physics_loop, daemon=True)
         self._thread.start()
+        LOGGER.info("MockRobotClient started | ip=%s", ip)
 
     def set_ip(self, ip: str) -> None:
         with self._lock:
             self._status.ip = ip
+        LOGGER.info("MockRobotClient IP set to %s", ip)
 
     def ping(self) -> float | None:
         with self._lock:
@@ -105,6 +110,7 @@ class MockRobotClient:
     def close(self) -> None:
         self._stop.set()
         self._thread.join(timeout=1.0)
+        LOGGER.info("MockRobotClient stopped")
 
     def _physics_loop(self) -> None:
         last_t = monotonic()

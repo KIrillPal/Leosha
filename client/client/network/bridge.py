@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from collections import deque
 from dataclasses import dataclass
 from time import monotonic_ns
@@ -7,6 +8,8 @@ from time import monotonic_ns
 from ..models import ServerPacket, TelemetryPacket
 from .mock_server import MockServer
 from .serialization import pack_missing_report, pack_telemetry_packet, unpack_server_packet
+
+LOGGER = logging.getLogger(__name__)
 
 
 @dataclass
@@ -23,6 +26,7 @@ class InMemoryBridge:
         self._server = server
         self._stats = BridgeStats()
         self._telemetry_history: deque[TelemetryPacket] = deque(maxlen=128)
+        LOGGER.info("InMemoryBridge initialized")
 
     @property
     def stats(self) -> BridgeStats:
@@ -86,6 +90,13 @@ class ZmqBridge:
         self._report_pub.setsockopt(zmq.SNDHWM, int(send_high_water_mark))
         self._report_pub.setsockopt(zmq.IMMEDIATE, 1)
         self._report_pub.connect(f"tcp://{server_host}:{int(report_port)}")
+        LOGGER.info(
+            "ZmqBridge connected | host=%s telemetry=%s command=%s report=%s",
+            server_host,
+            telemetry_port,
+            command_port,
+            report_port,
+        )
 
     @property
     def stats(self) -> BridgeStats:
@@ -116,4 +127,5 @@ class ZmqBridge:
                 sock.close(linger=0)
             except Exception:
                 pass
+        LOGGER.info("ZmqBridge sockets closed")
 

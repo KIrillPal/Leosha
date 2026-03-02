@@ -1,14 +1,18 @@
 from __future__ import annotations
 
 import argparse
+import logging
 from pathlib import Path
 
 from .config import load_server_config
 from .interfaces import AlgorithmContext
+from .logging_setup import configure_pipeline_logging
 from .ros_node import Ros2ServerBridge
 from .services.controller_service import ControllerService
 from .services.robot_client import MockRobotClient
 from .web.app_factory import create_app
+
+LOGGER = logging.getLogger(__name__)
 
 
 def _configs_dir() -> Path:
@@ -35,9 +39,11 @@ def build_runtime(config_path: str):
 
 
 def main() -> None:
+    log_path = configure_pipeline_logging("server_pipeline")
     parser = argparse.ArgumentParser(description="Server runtime (ROS2 package)")
     parser.add_argument("--config", default=default_config_path(), help="Путь к YAML конфигу")
     args, _ = parser.parse_known_args()  # unknown args (e.g. --ros-args) передаются launch'ем
+    LOGGER.info("Starting server pipeline | config=%s log_file=%s", args.config, log_path)
 
     cfg, app, controller, robot = build_runtime(args.config)
     ros_bridge = Ros2ServerBridge()
@@ -50,6 +56,7 @@ def main() -> None:
         controller.stop_command_loop()
         robot.close()
         ros_bridge.stop()
+        LOGGER.info("Server pipeline stopped")
 
 
 if __name__ == "__main__":

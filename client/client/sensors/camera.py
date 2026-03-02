@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import logging
 import threading
 from time import monotonic, monotonic_ns, sleep
 
 from .base import HealthcheckResult
+
+LOGGER = logging.getLogger(__name__)
 
 class CameraSensorThread(threading.Thread):
     """Поток реальной камеры IMX290 через picamera2."""
@@ -98,6 +101,7 @@ class CameraSensorThread(threading.Thread):
         name = "camera"
         if not self._cfg.enabled:
             self._statuses.mark_disabled(name, "disabled_in_config")
+            LOGGER.info("Camera sensor disabled by config")
             return
         try:
             from picamera2 import Picamera2
@@ -122,8 +126,10 @@ class CameraSensorThread(threading.Thread):
             self._camera.start()
         except Exception as exc:
             self._statuses.mark_failure(name, f"init_failed: {exc}")
+            LOGGER.error("Camera initialization failed: %s", exc)
             if self._cfg.fail_policy.auto_disable_on_fail:
                 self._statuses.mark_disabled(name, "init_failed")
+                LOGGER.warning("Camera sensor auto-disabled after init failure")
             return
 
         period = 1.0 / max(1.0, float(self._cfg.fps))
@@ -151,6 +157,7 @@ class CameraSensorThread(threading.Thread):
                 self._stats.record(name, monotonic_ns() - read_start, monotonic_ns() - cycle_start, is_error=True)
                 if self._failures >= self._cfg.fail_policy.max_consecutive_failures and self._cfg.fail_policy.auto_disable_on_fail:
                     self._statuses.mark_disabled(name, "too_many_failures")
+                    LOGGER.error("Camera sensor auto-disabled after %d consecutive failures", self._failures)
                     break
                 sleep(max(0.05, float(self._cfg.fail_policy.retry_interval_sec)))
                 continue
@@ -161,3 +168,4 @@ class CameraSensorThread(threading.Thread):
                 self._camera.stop()
             except Exception:
                 pass
+        LOGGER.info("Camera sensor thread stopped")
