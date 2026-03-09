@@ -35,8 +35,8 @@ actuators:
   wheel:
     channel: 1
     min_throttle: -1.0
-    zero_throttle: 0.15
-    max_throttle: 0.92
+    zero_throttle: 0.0
+    max_throttle: 1.0
     pwm_min_pulse: 1000
     pwm_max_pulse: 2000
     invert: true
@@ -100,8 +100,8 @@ sensors:
     awb_enable: true
     ae_enable: false
     jpeg_quality: 70
-    healthcheck_timeout_sec: 5.0
-    healthcheck_test_timeout_sec: 5.0
+    healthcheck_timeout_sec: 25.0
+    healthcheck_test_timeout_sec: 25.0
     healthcheck_min_frames: 2
     fail_policy:
       max_consecutive_failures: 3

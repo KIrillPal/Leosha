@@ -15,7 +15,6 @@ from time import sleep
 from modules.head import HeadController
 from modules.camera import CameraController
 from modules.car import Car
-from modules.detector import HumanDetector
 
 _CONFIG_DIR = str(Path(__file__).resolve().parent / "config")
 
@@ -315,7 +314,7 @@ def generate_frames():
     """Frame generator for video stream"""
     import time
     while True:
-        frame = camera.get_frame()
+        frame = camera.get_frame() if camera else None
         if frame is not None:
             h, w = frame.shape[:2]
             # Draw crosshair at center
@@ -364,15 +363,18 @@ def main(cfg: DictConfig):
     head = HeadController(pca, cfg.head)
     head.setup()
 
-    camera = CameraController(cfg.camera, cfg.output.directory, cfg.output.save_images)
-    camera.setup()
+    try:
+        camera = CameraController(cfg.camera, cfg.output.directory, cfg.output.save_images)
+        camera.setup()
+    except IndexError as e:
+        print(f"No camera found: {e}")
 
     car = Car(pca, cfg.car)
     car.setup()
 
     model_name = str(OmegaConf.select(cfg, "tracking.model", default="yolov8n.pt"))
     conf_threshold = float(OmegaConf.select(cfg, "tracking.conf_threshold", default=0.5))
-    detector = HumanDetector(model_name=model_name, conf_threshold=conf_threshold)
+    # detector = HumanDetector(model_name=model_name, conf_threshold=conf_threshold)
     
     print(f"Starting web server on {cfg.app.host}:{cfg.app.port}")
     print("Open http://<your-pi-ip>:5000 in your browser")
@@ -383,7 +385,8 @@ def main(cfg: DictConfig):
         print("\nShutting down...")
     finally:
         # Cleanup
-        camera.stop()
+        if camera:
+            camera.stop()
         head.neck.stop()
         head.set_face_angle(0)
 

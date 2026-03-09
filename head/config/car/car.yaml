@@ -18,8 +18,8 @@ motor:
 wheel:
   channel: 1
   min_throttle: -1.0
-  zero_throttle: 0.15
-  max_throttle: 0.92
+  zero_throttle: 0.1
+  max_throttle: 1.0
 
 pwm:
   min_pulse: 1000
