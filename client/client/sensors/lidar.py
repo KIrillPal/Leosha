@@ -148,7 +148,9 @@ class TMiniProPlusLidarThread(threading.Thread):
         LOGGER.info("Lidar sensor thread stopped")
 
     def _to_laserscan(self, scan_obj) -> LaserScan:
-        points = sorted(scan_obj.points, key=lambda p: p.angle)
+        # Sort by output angle so angle_min < angle_max and increment is positive (frontend expects first + i*inc).
+        out_key = (lambda p: -float(p.angle)) if bool(self._cfg.invert_angle) else (lambda p: float(p.angle))
+        points = sorted(scan_obj.points, key=out_key)
         if len(points) < 2:
             raise RuntimeError("not enough points")
         if bool(self._cfg.invert_angle):

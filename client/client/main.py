@@ -27,7 +27,12 @@ def main() -> None:
     log_path = configure_pipeline_logging("client_pipeline")
     parser = argparse.ArgumentParser(description="Leosha client runtime")
     parser.add_argument("--config", default=default_config_path(), help="Путь к YAML конфигу")
-    parser.add_argument("--duration-sec", type=float, default=5.0, help="Длительность демо запуска")
+    parser.add_argument(
+        "--duration-sec",
+        type=float,
+        default=None,
+        help="Длительность демо запуска в секундах; если не задан — работа без ограничения по времени",
+    )
     parser.add_argument(
         "--transport",
         choices=["mock", "zmq"],
@@ -58,7 +63,11 @@ def main() -> None:
     runtime = ClientRuntime(bridge=bridge, actuator_driver=actuators, config=config)
     runtime.start()
     try:
-        sleep(max(0.1, args.duration_sec))
+        if args.duration_sec is None:
+            while True: # ждать бесконечно
+                sleep(3600)
+        else:
+            sleep(max(0.1, args.duration_sec))
     finally:
         runtime.stop()
         LOGGER.info("Client pipeline stopped")
