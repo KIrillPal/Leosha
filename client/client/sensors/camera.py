@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import io
 import logging
 import threading
 from time import monotonic, monotonic_ns, sleep
@@ -8,14 +7,6 @@ from time import monotonic, monotonic_ns, sleep
 from .base import HealthcheckResult
 
 LOGGER = logging.getLogger(__name__)
-
-# Encode RGB numpy array to JPEG bytes (RGB order preserved for browser display).
-def _encode_rgb_jpeg(frame_rgb, quality: int) -> bytes:
-    from PIL import Image
-    img = Image.fromarray(frame_rgb, mode="RGB")
-    buf = io.BytesIO()
-    img.save(buf, format="JPEG", quality=quality)
-    return buf.getvalue()
 
 class CameraSensorThread(threading.Thread):
     """Поток реальной камеры IMX290 через picamera2."""
@@ -28,6 +19,7 @@ class CameraSensorThread(threading.Thread):
         self._statuses = statuses
         self._stop_event = stop_event
         self._camera = None
+        self._cv2 = None
         self._failures = 0
 
     def healthcheck(self, timeout_sec: float | None = None) -> HealthcheckResult:
@@ -39,10 +31,9 @@ class CameraSensorThread(threading.Thread):
         camera = None
         try:
             from picamera2 import Picamera2
+            import cv2
 
-            tuning = (self._cfg.tuning_file or "").strip() or None
-            if tuning:
-                LOGGER.info("Camera healthcheck using tuning_file=%s", tuning)
+            tuning = self._cfg.tuning_file if self._cfg.tuning_file else None
             camera = Picamera2(tuning=tuning)
             config = camera.create_video_configuration(
                 main={"size": tuple(self._cfg.resolution), "format": "RGB888"},
@@ -62,15 +53,22 @@ class CameraSensorThread(threading.Thread):
             frames = 0
             while (monotonic() - t_start) < timeout:
                 frame = camera.capture_array()
-                last_jpeg = _encode_rgb_jpeg(frame, int(self._cfg.jpeg_quality))
-                frames += 1
-                if frames >= int(self._cfg.healthcheck_min_frames):
-                    return HealthcheckResult(
-                        sensor_name=sensor_name,
-                        ok=True,
-                        latency_ms=(monotonic() - t_start) * 1000.0,
-                        details={"frame_jpeg": last_jpeg, "frames": frames, "resolution": tuple(self._cfg.resolution)},
-                    )
+                frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+                ok, encoded = cv2.imencode(
+                    ".jpg",
+                    frame,
+                    [int(cv2.IMWRITE_JPEG_QUALITY), int(self._cfg.jpeg_quality)],
+                )
+                if ok:
+                    frames += 1
+                    last_jpeg = encoded.tobytes()
+                    if frames >= int(self._cfg.healthcheck_min_frames):
+                        return HealthcheckResult(
+                            sensor_name=sensor_name,
+                            ok=True,
+                            latency_ms=(monotonic() - t_start) * 1000.0,
+                            details={"frame_jpeg": last_jpeg, "frames": frames, "resolution": tuple(self._cfg.resolution)},
+                        )
             return HealthcheckResult(
                 sensor_name=sensor_name,
                 ok=False,
@@ -107,10 +105,10 @@ class CameraSensorThread(threading.Thread):
             return
         try:
             from picamera2 import Picamera2
+            import cv2
 
-            tuning = (self._cfg.tuning_file or "").strip() or None
-            if tuning:
-                LOGGER.info("Camera using tuning_file=%s", tuning)
+            self._cv2 = cv2
+            tuning = self._cfg.tuning_file if self._cfg.tuning_file else None
             self._camera = Picamera2(tuning=tuning)
             config = self._camera.create_video_configuration(
                 main={"size": tuple(self._cfg.resolution), "format": "RGB888"},
@@ -140,9 +138,15 @@ class CameraSensorThread(threading.Thread):
             read_start = monotonic_ns()
             try:
                 frame = self._camera.capture_array()
-                jpeg_bytes = _encode_rgb_jpeg(frame, int(self._cfg.jpeg_quality))
+                ok, encoded = self._cv2.imencode(
+                    ".jpg",
+                    frame,
+                    [int(self._cv2.IMWRITE_JPEG_QUALITY), int(self._cfg.jpeg_quality)],
+                )
+                if not ok:
+                    raise RuntimeError("cv2.imencode returned False")
                 read_end = monotonic_ns()
-                self._hub.put_frame(jpeg_bytes, read_end)
+                self._hub.put_frame(encoded.tobytes(), read_end)
                 self._statuses.mark_ok(name)
                 self._failures = 0
                 self._stats.record(name, read_end - read_start, monotonic_ns() - cycle_start)
