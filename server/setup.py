@@ -46,6 +46,8 @@ setup(
         "numpy>=1.24",
         "Pillow>=9.0",
         "PyYAML>=6.0",
+        "pyzmq>=25.0",
+        "msgpack>=1.0",
     ],
     extras_require={
         "test": [

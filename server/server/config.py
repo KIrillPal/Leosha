@@ -17,6 +17,7 @@ class AppSection:
 @dataclass
 class RobotSection:
     ip: str
+    backend: str = "mock"
 
 
 @dataclass
@@ -30,6 +31,13 @@ class ControlSection:
 @dataclass
 class NetworkSection:
     grafana_url: str
+    bind_address: str = "0.0.0.0"
+    telemetry_port: int = 5550
+    command_port: int = 5552
+    report_port: int = 5553
+    recv_timeout_ms: int = 100
+    send_high_water_mark: int = 2
+    recv_high_water_mark: int = 1
 
 
 @dataclass

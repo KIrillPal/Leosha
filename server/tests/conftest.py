@@ -11,8 +11,16 @@ from server.services.robot_client import MockRobotClient
 from server.web.app_factory import create_app
 
 
+def pytest_addoption(parser):
+    parser.addoption("--robot-ip", default="", help="IP address of the robot client (for connectivity tests)")
+    parser.addoption("--telemetry-port", default="5550", help="Telemetry port (default 5550)")
+    parser.addoption("--command-port", default="5552", help="Command port (default 5552)")
+    parser.addoption("--report-port", default="5553", help="Report port (default 5553)")
+    parser.addoption("--wait-sec", default="10", help="Max seconds to wait for first packet (default 10)")
+    parser.addoption("--min-packets", default="3", help="Min packets to consider client alive (default 3)")
+
+
 def _configs_dir() -> Path:
-    """Папка configs: code/configs (из code/server/tests на 2 уровня вверх = code)."""
     return Path(__file__).resolve().parents[2] / "configs"
 
 
