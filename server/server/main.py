@@ -60,7 +60,7 @@ def main() -> None:
     parser.add_argument("--config", default=default_config_path(), help="Путь к YAML конфигу")
     parser.add_argument(
         "--transport",
-        choices=["mock", "zmq"],
+        choices=["mock", "zmq", ""],
         default="",
         help="Транспорт до робота: mock (без сети) или zmq (реальный ZeroMQ). "
              "Если не указан — берётся из конфига (robot.backend).",

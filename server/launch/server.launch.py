@@ -12,12 +12,21 @@ def generate_launch_description():
         description="Путь к YAML конфигу для server",
     )
 
+    transport_arg = DeclareLaunchArgument(
+        "transport",
+        default_value="",
+        description="Транспорт до робота: mock / zmq (пусто = из конфига)",
+    )
+
     node = Node(
         package="server",
         executable="server",
         name="server",
         output="screen",
-        arguments=["--config", LaunchConfiguration("config")],
+        arguments=[
+            "--config", LaunchConfiguration("config"),
+            "--transport", LaunchConfiguration("transport"),
+        ],
     )
 
-    return LaunchDescription([config_arg, node])
+    return LaunchDescription([config_arg, transport_arg, node])

@@ -1,0 +1,24 @@
+app:
+  host: "0.0.0.0"
+  port: 8080
+  command_hz: 100.0
+
+robot:
+  ip: "192.168.31.232"
+  backend: "zmq"
+
+control:
+  max_speed_normal: 0.45
+  max_speed_fast: 0.75
+  max_steering: 0.65
+  head_sensitivity: 0.002
+
+network:
+  grafana_url: ""
+  bind_address: "0.0.0.0"
+  telemetry_port: 5550
+  command_port: 5552
+  report_port: 5553
+  recv_timeout_ms: 100
+  send_high_water_mark: 2
+  recv_high_water_mark: 1

@@ -1,3 +1,4 @@
+import shutil
 from pathlib import Path
 
 from setuptools import setup, find_packages
@@ -5,8 +6,12 @@ from setuptools.command.install_scripts import install_scripts
 
 
 package_name = "server"
-# configs лежат в code/configs (родитель setup.py = code/server, его родитель = code)
 _configs_dir = Path(__file__).resolve().parent.parent / "configs"
+
+_local_config = Path(__file__).resolve().parent / "config" / "server.yaml"
+if _configs_dir.joinpath("server.yaml").exists():
+    _local_config.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(_configs_dir / "server.yaml", _local_config)
 
 
 class install_scripts_with_env_shebang(install_scripts):
@@ -37,7 +42,7 @@ setup(
             "server/web/templates/teleop.html",
             "server/web/templates/network.html",
         ]),
-        *([(f"share/{package_name}/config", [str(_configs_dir / "server.yaml")])] if _configs_dir.joinpath("server.yaml").exists() else []),
+        (f"share/{package_name}/config", ["config/server.yaml"]),
         (f"share/{package_name}/launch", ["launch/server.launch.py"]),
     ],
     install_requires=[
