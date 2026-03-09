@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+{% block title %}LiDAR{% endblock %}
+{% block content %}
+<style>
+    .lidar-wrap { display: grid; gap: 12px; grid-template-columns: 1fr 320px; }
+    .lidar-card { background: #0a0f1e; border: 1px solid #1e293b; border-radius: 12px; padding: 12px; }
+    .lidar-side { background: white; border: 1px solid #e5e7eb; border-radius: 12px; padding: 12px; }
+    #lidarCanvas { width: 100%; height: 70vh; display: block; border-radius: 10px; background: radial-gradient(circle at center, #101a34 0%, #090f20 65%, #060b18 100%); }
+    .metric-row { margin: 8px 0; }
+    .metric-name { color: #6b7280; font-size: 13px; }
+    .metric-value { font-size: 20px; font-weight: 700; }
+</style>
+<div class="lidar-wrap">
+    <div class="lidar-card">
+        <canvas id="lidarCanvas"></canvas>
+    </div>
+    <div class="lidar-side">
+        <h3>LiDAR Telemetry</h3>
+        <div class="metric-row"><div class="metric-name">Points</div><div class="metric-value" id="pointsCount">0</div></div>
+        <div class="metric-row"><div class="metric-name">Range (m)</div><div class="metric-value"><span id="rangeMin">0</span> .. <span id="rangeMax">0</span></div></div>
+        <div class="metric-row"><div class="metric-name">Angle span (deg)</div><div class="metric-value"><span id="angleMin">0</span> .. <span id="angleMax">0</span></div></div>
+        <div class="metric-row"><div class="metric-name">Last packet age</div><div class="metric-value"><span id="scanAgeMs">-</span> ms</div></div>
+        <p class="hint">Обновление происходит на каждом новом пакете скана.</p>
+    </div>
+</div>
+<script>
+const canvas = document.getElementById('lidarCanvas');
+const ctx = canvas.getContext('2d');
+const pointsCount = document.getElementById('pointsCount');
+const rangeMinEl = document.getElementById('rangeMin');
+const rangeMaxEl = document.getElementById('rangeMax');
+const angleMinEl = document.getElementById('angleMin');
+const angleMaxEl = document.getElementById('angleMax');
+const scanAgeMsEl = document.getElementById('scanAgeMs');
+let lastScanTimestampNs = 0;
+
+function resizeCanvas() {
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = Math.max(320, Math.floor(rect.width));
+    canvas.height = Math.max(320, Math.floor(rect.height));
+}
+
+function drawGrid(centerX, centerY, radiusPx) {
+    ctx.save();
+    ctx.strokeStyle = 'rgba(125, 211, 252, 0.12)';
+    ctx.lineWidth = 1;
+    for (let i = 1; i <= 5; i += 1) {
+        const r = radiusPx * (i / 5);
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, r, 0, Math.PI * 2);
+        ctx.stroke();
+    }
+    for (let deg = -180; deg < 180; deg += 30) {
+        const a = (deg * Math.PI) / 180;
+        ctx.beginPath();
+        ctx.moveTo(centerX, centerY);
+        ctx.lineTo(centerX + Math.cos(a) * radiusPx, centerY - Math.sin(a) * radiusPx);
+        ctx.stroke();
+    }
+    ctx.restore();
+}
+
+function toColor(intensity) {
+    const factor = Math.max(0, Math.min(1, intensity / 255));
+    const hue = 240 - 240 * factor;
+    return `hsla(${hue}, 95%, 62%, 0.95)`;
+}
+
+function drawScan(scan) {
+    const w = canvas.width;
+    const h = canvas.height;
+    const cx = w / 2;
+    const cy = h / 2;
+    const rMax = Math.max(0.1, Number(scan.range_max || 5.0));
+    const radiusPx = Math.min(w, h) * 0.45;
+    ctx.clearRect(0, 0, w, h);
+    drawGrid(cx, cy, radiusPx);
+
+    const ranges = Array.isArray(scan.ranges) ? scan.ranges : [];
+    const intensities = Array.isArray(scan.intensities) ? scan.intensities : [];
+    const aMin = Number(scan.angle_min || 0);
+    const aInc = Number(scan.angle_increment || 0);
+    const shadowWidth = (5 * Math.PI) / 180;
+
+    for (let i = 0; i < ranges.length; i += 1) {
+        const dist = Number(ranges[i]);
+        if (!Number.isFinite(dist) || dist <= 0) continue;
+        const angle = -(aMin + aInc * i);
+        const rr = Math.min(1, dist / rMax);
+        const x = cx + Math.cos(angle) * radiusPx * rr;
+        const y = cy - Math.sin(angle) * radiusPx * rr;
+        const outerX1 = cx + Math.cos(angle - shadowWidth / 2) * radiusPx;
+        const outerY1 = cy - Math.sin(angle - shadowWidth / 2) * radiusPx;
+        const outerX2 = cx + Math.cos(angle + shadowWidth / 2) * radiusPx;
+        const outerY2 = cy - Math.sin(angle + shadowWidth / 2) * radiusPx;
+
+        ctx.fillStyle = 'rgba(16, 185, 129, 0.04)';
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.lineTo(outerX1, outerY1);
+        ctx.lineTo(outerX2, outerY2);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.fillStyle = toColor(Number(intensities[i] || 0));
+        ctx.beginPath();
+        ctx.arc(x, y, 2.2, 0, Math.PI * 2);
+        ctx.fill();
+    }
+}
+
+async function refreshLidar() {
+    const resp = await fetch('/api/lidar');
+    const data = await resp.json();
+    if (!data.success || !data.scan) {
+        return;
+    }
+    const scan = data.scan;
+    pointsCount.textContent = Array.isArray(scan.ranges) ? scan.ranges.length : 0;
+    rangeMinEl.textContent = Number(scan.range_min || 0).toFixed(2);
+    rangeMaxEl.textContent = Number(scan.range_max || 0).toFixed(2);
+    angleMinEl.textContent = (Number(scan.angle_min || 0) * 180 / Math.PI).toFixed(1);
+    angleMaxEl.textContent = (Number(scan.angle_max || 0) * 180 / Math.PI).toFixed(1);
+    if (scan.timestamp_ns) {
+        lastScanTimestampNs = Number(scan.timestamp_ns);
+    }
+    drawScan(scan);
+}
+
+function refreshAge() {
+    if (!lastScanTimestampNs) return;
+    const nowNs = Date.now() * 1e6;
+    scanAgeMsEl.textContent = ((nowNs - lastScanTimestampNs) / 1e6).toFixed(1);
+}
+
+window.addEventListener('resize', () => {
+    resizeCanvas();
+});
+resizeCanvas();
+refreshLidar();
+setInterval(refreshLidar, 100);
+setInterval(refreshAge, 100);
+</script>
+{% endblock %}

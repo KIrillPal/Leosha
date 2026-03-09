@@ -41,6 +41,10 @@ def create_app(controller: ControllerService, robot_client: RobotClient, config:
     def network_page():
         return render_template("network.html", active_tab="network", grafana_url=config.network.grafana_url)
 
+    @app.get("/lidar")
+    def lidar_page():
+        return render_template("lidar.html", active_tab="lidar")
+
     @app.get("/video_feed")
     def video_feed():
         def generate():
@@ -162,5 +166,12 @@ def create_app(controller: ControllerService, robot_client: RobotClient, config:
             "tx_packets_per_sec": round(stats.tx_packets_per_sec, 2),
             "rx_packets_per_sec": round(stats.rx_packets_per_sec, 2),
         })
+
+    @app.get("/api/lidar")
+    def get_lidar_scan():
+        scan = robot_client.get_latest_lidar_scan()
+        if scan is None:
+            return jsonify({"success": False, "scan": None})
+        return jsonify({"success": True, "scan": scan})
 
     return app

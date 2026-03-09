@@ -44,7 +44,7 @@ class SlamTeleoperationAlgorithm(ControlAlgorithm):
         telemetry: TelemetryFrame,
     ) -> ControlCommand:
         if not manual.tracking_enabled:
-            return ControlCommand(mode=self.mode)
+            return ControlCommand(mode=self.mode, head_pan=self._head_pan, head_tilt=self._head_tilt)
 
         speed = 0.0
         steering = 0.0

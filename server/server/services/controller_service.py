@@ -98,6 +98,20 @@ class ControllerService:
                     "ctrl": self._manual.ctrl,
                 },
                 "mode": self._active_mode.value,
+                "command": {
+                    "speed": float(self._last_command.speed),
+                    "steering": float(self._last_command.steering),
+                    "head_pan": float(self._last_command.head_pan),
+                    "head_tilt": float(self._last_command.head_tilt),
+                    "head_pan_deg": float(self._last_command.head_pan) * 60.0,
+                    "head_tilt_deg": float(self._last_command.head_tilt) * 45.0,
+                },
+                "telemetry": {
+                    "speed_mps": float(self._last_telemetry.speed_mps),
+                    "steering_rad": float(self._last_telemetry.steering_rad),
+                    "steering_deg": float(self._last_telemetry.steering_rad) * 57.29577951308232,
+                    "imu_yaw_rate": float(self._last_telemetry.imu_yaw_rate),
+                },
             }
 
     def tick_once(self) -> ControlCommand:

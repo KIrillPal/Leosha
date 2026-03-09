@@ -11,7 +11,7 @@ control:
   max_speed_normal: 0.45
   max_speed_fast: 0.75
   max_steering: 0.65
-  head_sensitivity: 0.002
+  head_sensitivity: -0.002
 
 network:
   grafana_url: ""

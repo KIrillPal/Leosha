@@ -23,6 +23,7 @@ setup(
         "msgpack>=1.0",
         "numpy>=1.24",
         "pyzmq>=25.0",
+        "Pillow>=9.0",
     ],
     extras_require={
         "test": [

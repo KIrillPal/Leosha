@@ -41,6 +41,7 @@ setup(
             "server/web/templates/settings.html",
             "server/web/templates/teleop.html",
             "server/web/templates/network.html",
+            "server/web/templates/lidar.html",
         ]),
         (f"share/{package_name}/config", ["config/server.yaml"]),
         (f"share/{package_name}/launch", ["launch/server.launch.py"]),

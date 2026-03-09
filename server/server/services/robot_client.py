@@ -33,6 +33,7 @@ class RobotClient(Protocol):
     def send_command(self, command: ControlCommand) -> None: ...
     def get_latest_telemetry(self) -> TelemetryFrame: ...
     def get_latest_frame(self) -> bytes: ...
+    def get_latest_lidar_scan(self) -> dict | None: ...
     def get_network_stats(self) -> NetworkStats: ...
 
 
@@ -65,10 +66,10 @@ def _server_mode_to_client_str(mode: ControlMode) -> str:
 class ZmqRobotClient:
     """Receives telemetry from the robot via ZMQ and sends commands back.
 
-    Socket topology (mirrors client's ZmqBridge):
-      server SUB  binds  telemetry_port   ← client PUB connects
-      server PUB  binds  command_port     → client SUB connects
-      server SUB  binds  report_port      ← client PUB connects
+    Socket topology (current):
+      server SUB  binds     telemetry_port   ← client PUB connects
+      server PUB  connects  command_port     → client SUB binds
+      server SUB  binds     report_port      ← client PUB connects
     """
 
     _BLACK_FRAME = _make_black_frame_jpeg()
@@ -113,6 +114,7 @@ class ZmqRobotClient:
         self._last_ping_ms: float | None = None
         self._telemetry = TelemetryFrame(frame_jpeg=self._BLACK_FRAME)
         self._latest_frame: bytes = self._BLACK_FRAME
+        self._latest_lidar_scan: dict | None = None
         self._counters = _Counters()
         self._network = NetworkStats()
         self._cmd_seq = 0
@@ -174,6 +176,12 @@ class ZmqRobotClient:
     def get_latest_frame(self) -> bytes:
         with self._lock:
             return self._latest_frame
+
+    def get_latest_lidar_scan(self) -> dict | None:
+        with self._lock:
+            if self._latest_lidar_scan is None:
+                return None
+            return dict(self._latest_lidar_scan)
 
     def get_network_stats(self) -> NetworkStats:
         with self._lock:
@@ -266,6 +274,18 @@ class ZmqRobotClient:
             self._telemetry.imu_yaw_rate = float(imu_yaw_rate)
             self._telemetry.frame_jpeg = frame_jpeg
             self._latest_frame = frame_jpeg
+            scan = header.get("scan")
+            if isinstance(scan, dict):
+                self._latest_lidar_scan = {
+                    "timestamp_ns": int(scan.get("timestamp_ns", 0)),
+                    "angle_min": float(scan.get("angle_min", 0.0)),
+                    "angle_max": float(scan.get("angle_max", 0.0)),
+                    "angle_increment": float(scan.get("angle_increment", 0.0)),
+                    "range_min": float(scan.get("range_min", 0.0)),
+                    "range_max": float(scan.get("range_max", 0.0)),
+                    "ranges": list(scan.get("ranges", [])),
+                    "intensities": list(scan.get("intensities", [])),
+                }
 
             self._counters.rx_packets += 1
             self._counters.rx_bytes += len(header_raw) + len(frame_jpeg)
@@ -355,6 +375,9 @@ class MockRobotClient:
     def get_latest_frame(self) -> bytes:
         with self._lock:
             return self._telemetry.frame_jpeg
+
+    def get_latest_lidar_scan(self) -> dict | None:
+        return None
 
     def get_network_stats(self) -> NetworkStats:
         with self._lock:
