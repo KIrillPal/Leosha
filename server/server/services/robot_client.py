@@ -95,8 +95,9 @@ class ZmqRobotClient:
         self._telemetry_sub.bind(f"tcp://{bind_address}:{telemetry_port}")
 
         self._command_pub = self._ctx.socket(zmq.PUB)
-        self._command_pub.setsockopt(zmq.SNDHWM, int(send_high_water_mark))
-        self._command_pub.bind(f"tcp://{bind_address}:{command_port}")
+        self._command_pub.setsockopt(zmq.SNDHWM, max(100, int(send_high_water_mark)))
+        self._command_pub.setsockopt(zmq.LINGER, 0)
+        self._command_pub.connect(f"tcp://{ip}:{command_port}")
 
         self._report_sub = self._ctx.socket(zmq.SUB)
         self._report_sub.setsockopt_string(zmq.SUBSCRIBE, "")
@@ -115,13 +116,16 @@ class ZmqRobotClient:
         self._counters = _Counters()
         self._network = NetworkStats()
         self._cmd_seq = 0
+        self._rx_total = 0
+        self._tx_total = 0
+        self._report_total = 0
 
         self._recv_thread = threading.Thread(target=self._recv_loop, daemon=True)
         self._recv_thread.start()
 
         LOGGER.info(
-            "ZmqRobotClient started | ip=%s bind=%s ports=(%d,%d,%d)",
-            ip, bind_address, telemetry_port, command_port, report_port,
+            "ZmqRobotClient started | robot=%s bind=%s telem_port=%d cmd->%s:%d report_port=%d",
+            ip, bind_address, telemetry_port, ip, command_port, report_port,
         )
 
     # -- RobotClient protocol -----------------------------------------------
@@ -151,7 +155,14 @@ class ZmqRobotClient:
         try:
             self._command_pub.send(payload, flags=self._zmq.NOBLOCK)
         except self._zmq.Again:
-            pass
+            LOGGER.warning("Command PUB send dropped (HWM reached) | seq=%d", self._cmd_seq)
+        self._tx_total += 1
+        if self._tx_total <= 3 or self._tx_total % 500 == 0:
+            LOGGER.debug(
+                "CMD TX #%d | mode=%s speed=%.3f steer=%.3f pan=%.2f tilt=%.2f",
+                self._tx_total, command.mode.value, command.speed,
+                command.steering, command.head_pan, command.head_tilt,
+            )
         with self._lock:
             self._counters.tx_packets += 1
             self._counters.tx_bytes += len(payload)
@@ -192,6 +203,7 @@ class ZmqRobotClient:
         poller = self._zmq.Poller()
         poller.register(self._telemetry_sub, self._zmq.POLLIN)
         poller.register(self._report_sub, self._zmq.POLLIN)
+        last_heartbeat = monotonic()
 
         while not self._stop.is_set():
             try:
@@ -207,13 +219,17 @@ class ZmqRobotClient:
                 except self._zmq.Again:
                     pass
                 except Exception as exc:
-                    LOGGER.debug("Telemetry recv error: %s", exc)
+                    LOGGER.warning("Telemetry recv error: %s", exc)
 
             if self._report_sub in events:
                 try:
                     raw = self._report_sub.recv(flags=self._zmq.NOBLOCK)
                     report = msgpack.unpackb(raw, raw=False)
-                    LOGGER.debug("Missing-packet report: %s", report)
+                    self._report_total += 1
+                    LOGGER.warning(
+                        "Client reports missing packets (#%d) | elapsed_ms=%.1f",
+                        self._report_total, report.get("elapsed_ms", 0),
+                    )
                 except Exception:
                     pass
 
@@ -222,6 +238,13 @@ class ZmqRobotClient:
                 if self._last_recv_time > 0 and (now - self._last_recv_time) > 3.0:
                     self._connected = False
                     self._last_ping_ms = None
+
+            if now - last_heartbeat >= 5.0:
+                last_heartbeat = now
+                LOGGER.debug(
+                    "ZMQ heartbeat | rx_telemetry=%d tx_commands=%d client_reports=%d connected=%s",
+                    self._rx_total, self._tx_total, self._report_total, self._connected,
+                )
 
     def _handle_telemetry(self, header_raw: bytes, frame_jpeg: bytes) -> None:
         now = monotonic()
@@ -246,6 +269,7 @@ class ZmqRobotClient:
 
             self._counters.rx_packets += 1
             self._counters.rx_bytes += len(header_raw) + len(frame_jpeg)
+            self._rx_total += 1
 
             elapsed_ms = (now - self._last_recv_time) * 1000 if self._last_recv_time > 0 else 0.0
             self._last_recv_time = now
@@ -254,10 +278,13 @@ class ZmqRobotClient:
             self._network.latency_ms = elapsed_ms
             self._network.rssi_dbm = float(header.get("wifi_rssi_dbm", -50.0))
 
-        LOGGER.debug(
-            "Telemetry rx | seq=%s frame=%d bytes latency=%.1fms",
-            header.get("seq"), len(frame_jpeg), elapsed_ms,
-        )
+        rx = self._rx_total
+        if rx <= 3 or rx % 300 == 0:
+            LOGGER.debug(
+                "TELEM RX #%d | seq=%s mode=%s status=%s frame=%d bytes dt=%.1fms",
+                rx, header.get("seq"), header.get("mode"), header.get("status"),
+                len(frame_jpeg), elapsed_ms,
+            )
 
     def _pack_server_packet(self, command: ControlCommand) -> bytes:
         payload = {

@@ -217,14 +217,27 @@ class ClientRuntime:
 
     def _command_loop(self) -> None:
         period = 1.0 / self.config.app.command_hz
+        rx_cmd_count = 0
         while not self._stop.is_set():
             t0 = monotonic_ns()
             packet = self.bridge.recv_packet()
             if packet is not None:
+                rx_cmd_count += 1
                 self.watchdog.feed()
                 self.state.merge_server_packet(packet)
                 if packet.teleop_cmd:
                     self._last_gyro_z = packet.teleop_cmd.steering * packet.teleop_cmd.speed
+                    if rx_cmd_count <= 5 or rx_cmd_count % 300 == 0:
+                        LOGGER.info(
+                            "CMD RX #%d | seq=%d mode=%s speed=%.3f steer=%.3f",
+                            rx_cmd_count, packet.header.seq, packet.header.mode.value,
+                            packet.teleop_cmd.speed, packet.teleop_cmd.steering,
+                        )
+                elif rx_cmd_count <= 5:
+                    LOGGER.info(
+                        "CMD RX #%d | seq=%d mode=%s (no teleop_cmd)",
+                        rx_cmd_count, packet.header.seq, packet.header.mode.value,
+                    )
             status = self.watchdog.status()
             if self._must_stop_by_sensor_status():
                 status = RobotStatus.EMERGENCY_STOP
