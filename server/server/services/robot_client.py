@@ -37,6 +37,7 @@ class RobotClient(Protocol):
     def get_network_stats(self) -> NetworkStats: ...
     def get_robot_config(self) -> dict | None: ...
     def get_avg_packet_parts(self) -> dict[str, float]: ...
+    def get_client_state(self) -> dict: ...
 
 
 @dataclass
@@ -127,6 +128,8 @@ class ZmqRobotClient:
         self._rx_total = 0
         self._tx_total = 0
         self._report_total = 0
+        self._client_status: str = "unknown"
+        self._client_aborted_reason: str | None = None
 
         self._recv_thread = threading.Thread(target=self._recv_loop, daemon=True)
         self._recv_thread.start()
@@ -210,6 +213,13 @@ class ZmqRobotClient:
         with self._lock:
             return dict(self._avg_parts)
 
+    def get_client_state(self) -> dict:
+        with self._lock:
+            return {
+                "status": self._client_status,
+                "aborted_reason": self._client_aborted_reason,
+            }
+
     def close(self) -> None:
         self._stop.set()
         self._recv_thread.join(timeout=2.0)
@@ -249,11 +259,19 @@ class ZmqRobotClient:
                 try:
                     raw = self._report_sub.recv(flags=self._zmq.NOBLOCK)
                     report = msgpack.unpackb(raw, raw=False)
-                    self._report_total += 1
-                    LOGGER.warning(
-                        "Client reports missing packets (#%d) | elapsed_ms=%.1f",
-                        self._report_total, report.get("elapsed_ms", 0),
-                    )
+                    rtype = report.get("type", "")
+                    if rtype == "profile_aborted_report":
+                        reason = report.get("reason", "unknown")
+                        with self._lock:
+                            self._client_aborted_reason = str(reason)
+                        LOGGER.warning("Client profile aborted: %s", reason)
+                    else:
+                        self._report_total += 1
+                        if self._report_total <= 3 or self._report_total % 100 == 0:
+                            LOGGER.warning(
+                                "Client reports missing packets (#%d) | elapsed_ms=%.1f (tx_cmd=%d)",
+                                self._report_total, report.get("elapsed_ms", 0), self._tx_total,
+                            )
                 except Exception:
                     pass
 
@@ -287,6 +305,9 @@ class ZmqRobotClient:
             self._telemetry.odom_y = float(pose.get("y", 0.0))
             self._telemetry.odom_yaw = float(pose.get("theta", 0.0))
             self._telemetry.odom_confidence = float(header.get("odom_confidence", 0.0))
+            self._client_status = str(header.get("status", "unknown"))
+            if self._client_status != "aborted":
+                self._client_aborted_reason = None
             self._telemetry.speed_mps = float(vel.get("linear", 0.0))
             self._telemetry.steering_rad = float(odom.get("steering_angle", 0.0))
             self._telemetry.imu_yaw_rate = float(imu_yaw_rate)
@@ -414,6 +435,9 @@ class MockRobotClient:
 
     def get_avg_packet_parts(self) -> dict[str, float]:
         return {"lidar": 0.0, "imu": 0.0, "config": 0.0, "camera": 0.0}
+
+    def get_client_state(self) -> dict:
+        return {"status": "running", "aborted_reason": None}
 
     def get_network_stats(self) -> NetworkStats:
         with self._lock:

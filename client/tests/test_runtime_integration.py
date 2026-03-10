@@ -24,6 +24,7 @@ def test_runtime_emergency_stop_when_packets_missing(client_config):
     from client.network import InMemoryBridge, MockServer
     from client.runtime import ClientRuntime
 
+    client_config.sensors.ultrasonic.required_for_motion = False
     cfg = MockServerConfig(mode=OperatingMode.TELEOPERATION, drop_every_nth=1)
     server = MockServer(cfg)
     bridge = InMemoryBridge(server)

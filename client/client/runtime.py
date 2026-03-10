@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 import threading
-from time import monotonic_ns, sleep
+from time import monotonic, monotonic_ns, sleep
 
 from .config import client_config_to_dict
 from .estimator import SimpleStateEstimator
@@ -261,17 +261,27 @@ class ClientRuntime:
                         rx_cmd_count, packet.header.seq, packet.header.mode.value,
                     )
             status = self.watchdog.status()
-            if self._must_stop_by_sensor_status():
-                status = RobotStatus.EMERGENCY_STOP
+            aborted_reason = self._get_aborted_reason()
+            if aborted_reason:
+                status = RobotStatus.ABORTED
             if status != self._last_status:
                 LOGGER.info("Client runtime status changed: %s -> %s", self._last_status, status)
                 if status == RobotStatus.EMERGENCY_STOP:
                     LOGGER.warning("Emergency stop active (watchdog or required sensors)")
+                if status == RobotStatus.ABORTED:
+                    LOGGER.warning("Profile aborted: required sensor disabled (%s)", aborted_reason)
+                    self.bridge.send_profile_aborted_report(aborted_reason)
+                    self._last_aborted_report_t = monotonic()
                 self._last_status = status
             self.state.set_status(status)
             if status in (RobotStatus.WAITING_FOR_SERVER, RobotStatus.EMERGENCY_STOP):
                 self.actuators.emergency_stop()
                 self.bridge.send_missing_packet_report(self.watchdog.elapsed_ms())
+            elif status == RobotStatus.ABORTED:
+                self.actuators.emergency_stop()
+                if monotonic() - getattr(self, "_last_aborted_report_t", 0) >= 5.0:
+                    self._last_aborted_report_t = monotonic()
+                    self.bridge.send_profile_aborted_report(aborted_reason or "unknown")
             else:
                 state_snapshot = self.state.snapshot()
                 mode = state_snapshot["mode"]
@@ -288,7 +298,8 @@ class ClientRuntime:
             self._seq += 1
             return self._seq
 
-    def _must_stop_by_sensor_status(self) -> bool:
+    def _get_aborted_reason(self) -> str | None:
+        """If a required sensor is disabled/unhealthy, return reason string; else None."""
         snapshot = self.sensor_statuses.snapshot()
         mode = self.state.snapshot()["mode"]
         required = []
@@ -301,6 +312,9 @@ class ClientRuntime:
         for name in required:
             status = snapshot.get(name)
             if status and (not status.enabled or not status.healthy):
-                return True
-        return False
+                return f"{name}_required_disabled"
+        return None
+
+    def _must_stop_by_sensor_status(self) -> bool:
+        return self._get_aborted_reason() is not None
 

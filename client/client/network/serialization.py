@@ -234,6 +234,17 @@ def pack_missing_report(elapsed_ms: float, timestamp_ns: int) -> bytes:
     )
 
 
+def pack_profile_aborted_report(reason: str, timestamp_ns: int) -> bytes:
+    return msgpack.packb(
+        {
+            "type": "profile_aborted_report",
+            "reason": str(reason),
+            "timestamp_ns": int(timestamp_ns),
+        },
+        use_bin_type=True,
+    )
+
+
 def _pack_imu(imu: ImuReading) -> dict:
     return {
         "timestamp_ns": imu.timestamp_ns,

@@ -7,7 +7,12 @@ from time import monotonic_ns
 
 from ..models import ServerPacket, TelemetryPacket
 from .mock_server import MockServer
-from .serialization import pack_missing_report, pack_telemetry_packet, unpack_server_packet
+from .serialization import (
+    pack_missing_report,
+    pack_profile_aborted_report,
+    pack_telemetry_packet,
+    unpack_server_packet,
+)
 
 LOGGER = logging.getLogger(__name__)
 
@@ -51,6 +56,9 @@ class InMemoryBridge:
 
     def send_missing_packet_report(self, elapsed_ms: float) -> None:
         self._server.report_missing(elapsed_ms)
+
+    def send_profile_aborted_report(self, reason: str) -> None:
+        self._server.report_profile_aborted(reason)
 
 
 class ZmqBridge:
@@ -122,6 +130,10 @@ class ZmqBridge:
 
     def send_missing_packet_report(self, elapsed_ms: float) -> None:
         payload = pack_missing_report(elapsed_ms=elapsed_ms, timestamp_ns=monotonic_ns())
+        self._report_pub.send(payload)
+
+    def send_profile_aborted_report(self, reason: str) -> None:
+        payload = pack_profile_aborted_report(reason=reason, timestamp_ns=monotonic_ns())
         self._report_pub.send(payload)
 
     def close(self) -> None:

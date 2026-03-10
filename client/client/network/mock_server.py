@@ -69,6 +69,9 @@ class MockServer:
     def report_missing(self, elapsed_ms: float) -> None:
         self._missing_reports.append(float(elapsed_ms))
 
+    def report_profile_aborted(self, reason: str) -> None:
+        pass  # mock: no-op
+
     def _build_autonomy(self) -> AutonomyCommand:
         now = monotonic_ns()
         trajectory = []
