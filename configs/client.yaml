@@ -113,7 +113,7 @@ sensors:
     min_angle_deg: -180.0
     max_angle_deg: 180.0
     range_min_m: 0.02
-    range_max_m: 8.0
+    range_max_m: 6.0
     intensity_enabled: true
     invert_angle: false
     zero_angle_deg: -90  # угол «вперёд» в сырых градусах лидара; после сдвига на нём будет 0°
