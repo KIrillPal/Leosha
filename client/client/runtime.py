@@ -47,10 +47,21 @@ class ClientRuntime:
         self._last_status: RobotStatus | None = None
         self._stop = threading.Event()
         self._threads: list[threading.Thread] = []
+        head_cfg = config.robot_geometry.head
         self._executors = {
             OperatingMode.PAUSE: PauseExecutor(),
-            OperatingMode.TELEOPERATION: TeleoperationExecutor(),
-            OperatingMode.AUTONOMY_PROFILE_1: AutonomyExecutor(),
+            OperatingMode.TELEOPERATION: TeleoperationExecutor(
+                head_pan_min_deg=head_cfg.neck_min_deg,
+                head_pan_max_deg=head_cfg.neck_max_deg,
+                head_tilt_min_deg=head_cfg.face_min_deg,
+                head_tilt_max_deg=head_cfg.face_max_deg,
+            ),
+            OperatingMode.AUTONOMY_PROFILE_1: AutonomyExecutor(
+                head_pan_min_deg=head_cfg.neck_min_deg,
+                head_pan_max_deg=head_cfg.neck_max_deg,
+                head_tilt_min_deg=head_cfg.face_min_deg,
+                head_tilt_max_deg=head_cfg.face_max_deg,
+            ),
         }
         for name, hz in {
             "camera": config.sensors.camera.fps,

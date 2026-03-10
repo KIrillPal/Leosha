@@ -4,6 +4,7 @@ import math
 
 from ..interfaces import ModeExecutor
 from ..models import ActuatorCommand, OperatingMode, Pose2D, TrajectoryPoint
+from .teleoperation import _scale_head_axis
 
 
 class AutonomyExecutor(ModeExecutor):
@@ -16,12 +17,20 @@ class AutonomyExecutor(ModeExecutor):
         max_steering_rad: float = 0.6,
         speed_to_throttle: float = 1.4,
         steering_to_throttle: float = 1.7,
+        head_pan_min_deg: float = -60.0,
+        head_pan_max_deg: float = 60.0,
+        head_tilt_min_deg: float = -45.0,
+        head_tilt_max_deg: float = 45.0,
     ) -> None:
         self._wheelbase = float(wheelbase_m)
         self._lookahead = float(lookahead_m)
         self._max_steering_rad = float(max_steering_rad)
         self._speed_to_throttle = float(speed_to_throttle)
         self._steering_to_throttle = float(steering_to_throttle)
+        self._head_pan_min_deg = float(head_pan_min_deg)
+        self._head_pan_max_deg = float(head_pan_max_deg)
+        self._head_tilt_min_deg = float(head_tilt_min_deg)
+        self._head_tilt_max_deg = float(head_tilt_max_deg)
 
     @property
     def mode(self) -> OperatingMode:
@@ -41,8 +50,8 @@ class AutonomyExecutor(ModeExecutor):
         return ActuatorCommand(
             motor_throttle=max(-1.0, min(1.0, speed * self._speed_to_throttle)),
             steering_throttle=max(-1.0, min(1.0, steering_rad * self._steering_to_throttle)),
-            head_pan_angle=max(-1.0, min(1.0, head_pan)) * 60.0,
-            head_tilt_angle=max(-1.0, min(1.0, head_tilt)) * 45.0,
+            head_pan_angle=_scale_head_axis(head_pan, self._head_pan_min_deg, self._head_pan_max_deg),
+            head_tilt_angle=_scale_head_axis(head_tilt, self._head_tilt_min_deg, self._head_tilt_max_deg),
         )
 
     def _pick_target(self, pose: Pose2D, trajectory: list[TrajectoryPoint]) -> TrajectoryPoint:

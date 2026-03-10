@@ -42,16 +42,12 @@ actuators:
     invert: true
   neck:
     channel: 3
-    angle_min: -45.0
-    angle_max: 45.0
     angle_zero: 135.0
     actuation_range: 360
     pwm_min_pulse: 300
     pwm_max_pulse: 1800
   face:
     channel: 2
-    angle_min: -15.0
-    angle_max: 75.0
     angle_zero: 15.0
     actuation_range: 90
     pwm_min_pulse: 1000
@@ -83,10 +79,10 @@ robot_geometry:
       x: 0.12
       y: 0.0
       z: 0.17
-    neck_min_deg: -270.0
-    neck_max_deg: 270.0
-    face_min_deg: -20.0
-    face_max_deg: 90.0
+    neck_min_deg: -45.0
+    neck_max_deg: 45.0
+    face_min_deg: -15.0
+    face_max_deg: 75.0
 
 sensors:
   camera:
@@ -117,7 +113,7 @@ sensors:
     min_angle_deg: -180.0
     max_angle_deg: 180.0
     range_min_m: 0.02
-    range_max_m: 5.0
+    range_max_m: 8.0
     intensity_enabled: true
     invert_angle: false
     healthcheck_timeout_sec: 10.0

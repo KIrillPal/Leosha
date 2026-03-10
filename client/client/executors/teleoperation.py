@@ -8,9 +8,24 @@ from ..models import ActuatorCommand, OperatingMode, TeleoperationCommand
 LOGGER = logging.getLogger(__name__)
 
 
+def _scale_head_axis(value: float, min_deg: float, max_deg: float) -> float:
+    value = max(-1.0, min(1.0, float(value)))
+    if value >= 0.0:
+        return value * float(max_deg)
+    return value * abs(float(min_deg))
+
+
 class TeleoperationExecutor(ModeExecutor):
-    def __init__(self, head_pan_max_deg: float = 60.0, head_tilt_max_deg: float = 45.0) -> None:
+    def __init__(
+        self,
+        head_pan_min_deg: float = -60.0,
+        head_pan_max_deg: float = 60.0,
+        head_tilt_min_deg: float = -45.0,
+        head_tilt_max_deg: float = 45.0,
+    ) -> None:
+        self._head_pan_min_deg = float(head_pan_min_deg)
         self._head_pan_max_deg = float(head_pan_max_deg)
+        self._head_tilt_min_deg = float(head_tilt_min_deg)
         self._head_tilt_max_deg = float(head_tilt_max_deg)
         self._log_count = 0
 
@@ -25,8 +40,8 @@ class TeleoperationExecutor(ModeExecutor):
         result = ActuatorCommand(
             motor_throttle=max(-1.0, min(1.0, cmd.speed)),
             steering_throttle=max(-1.0, min(1.0, cmd.steering)),
-            head_pan_angle=max(-1.0, min(1.0, cmd.head_pan)) * self._head_pan_max_deg,
-            head_tilt_angle=max(-1.0, min(1.0, cmd.head_tilt)) * self._head_tilt_max_deg,
+            head_pan_angle=_scale_head_axis(cmd.head_pan, self._head_pan_min_deg, self._head_pan_max_deg),
+            head_tilt_angle=_scale_head_axis(cmd.head_tilt, self._head_tilt_min_deg, self._head_tilt_max_deg),
         )
         self._log_count += 1
         if self._log_count <= 5 or self._log_count % 300 == 0:

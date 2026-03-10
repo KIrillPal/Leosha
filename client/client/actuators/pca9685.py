@@ -45,8 +45,9 @@ class Pca9685ActuatorDriver:
     Логика преобразований синхронизирована с `code/head/modules/car.py` и `head.py`.
     """
 
-    def __init__(self, cfg) -> None:
+    def __init__(self, cfg, head_geometry) -> None:
         self._cfg = cfg
+        self._head_geometry = head_geometry
         self._feedback = ActuatorFeedback()
         self._kit = None
         self._motor = None
@@ -101,8 +102,16 @@ class Pca9685ActuatorDriver:
 
     def _set_head_angles(self, pan_deg: float, tilt_deg: float) -> None:
         # pan -> neck, tilt -> face
-        pan_user = self._clamp(pan_deg, float(self._cfg.neck.angle_min), float(self._cfg.neck.angle_max))
-        tilt_user = self._clamp(tilt_deg, float(self._cfg.face.angle_min), float(self._cfg.face.angle_max))
+        pan_user = self._clamp(
+            pan_deg,
+            float(self._head_geometry.neck_min_deg),
+            float(self._head_geometry.neck_max_deg),
+        )
+        tilt_user = self._clamp(
+            tilt_deg,
+            float(self._head_geometry.face_min_deg),
+            float(self._head_geometry.face_max_deg),
+        )
         self._neck.angle = float(self._cfg.neck.angle_zero) + pan_user
         self._face.angle = float(self._cfg.face.angle_zero) + tilt_user
 

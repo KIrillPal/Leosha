@@ -195,8 +195,6 @@ class WheelActuatorConfig:
 @dataclass
 class HeadServoActuatorConfig:
     channel: int = 0
-    angle_min: float = -90.0
-    angle_max: float = 90.0
     angle_zero: float = 90.0
     actuation_range: int = 180
     pwm_min_pulse: int = 0
@@ -402,8 +400,6 @@ def load_client_config(path: str) -> ClientConfig:
             ),
             neck=HeadServoActuatorConfig(
                 channel=int(neck_raw.get("channel", 3)),
-                angle_min=float(neck_raw.get("angle_min", -135.0)),
-                angle_max=float(neck_raw.get("angle_max", 135.0)),
                 angle_zero=float(neck_raw.get("angle_zero", 135.0)),
                 actuation_range=int(neck_raw.get("actuation_range", 360)),
                 pwm_min_pulse=int(neck_raw.get("pwm_min_pulse", 300)),
@@ -411,8 +407,6 @@ def load_client_config(path: str) -> ClientConfig:
             ),
             face=HeadServoActuatorConfig(
                 channel=int(face_raw.get("channel", 2)),
-                angle_min=float(face_raw.get("angle_min", -15.0)),
-                angle_max=float(face_raw.get("angle_max", 125.0)),
                 angle_zero=float(face_raw.get("angle_zero", 15.0)),
                 actuation_range=int(face_raw.get("actuation_range", 180)),
                 pwm_min_pulse=int(face_raw.get("pwm_min_pulse", 0)),

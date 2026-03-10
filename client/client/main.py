@@ -57,7 +57,7 @@ def main() -> None:
             recv_high_water_mark=config.network.recv_high_water_mark,
         )
     if str(config.actuators.backend).lower() == "pca9685":
-        actuators = Pca9685ActuatorDriver(config.actuators)
+        actuators = Pca9685ActuatorDriver(config.actuators, config.robot_geometry.head)
     else:
         actuators = MockActuatorDriver()
     runtime = ClientRuntime(bridge=bridge, actuator_driver=actuators, config=config)
