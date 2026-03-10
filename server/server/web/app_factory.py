@@ -221,6 +221,16 @@ def create_app(
         nodes = ros_graph.get_graph()
         return jsonify({"success": True, "nodes": nodes})
 
+    def _scan_for_json(scan: dict) -> dict:
+        """Copy scan and replace float('nan') with None so JSON serialization succeeds (frontend skips non-finite)."""
+        import math
+        out = dict(scan)
+        if "ranges" in out and isinstance(out["ranges"], (list, tuple)):
+            out["ranges"] = [None if isinstance(v, float) and math.isnan(v) else v for v in out["ranges"]]
+        if "intensities" in out and isinstance(out["intensities"], (list, tuple)):
+            out["intensities"] = [None if isinstance(v, float) and math.isnan(v) else v for v in out["intensities"]]
+        return out
+
     @app.get("/api/lidar")
     def get_lidar_scan():
         scan = robot_client.get_latest_lidar_scan()
@@ -234,6 +244,6 @@ def create_app(
                 invert_angle = bool(lidar_cfg.get("invert_angle", False))
         except Exception:
             invert_angle = False
-        return jsonify({"success": True, "scan": scan, "invert_angle": invert_angle})
+        return jsonify({"success": True, "scan": _scan_for_json(scan), "invert_angle": invert_angle})
 
     return app

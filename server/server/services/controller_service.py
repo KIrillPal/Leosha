@@ -3,7 +3,10 @@ from __future__ import annotations
 import logging
 import threading
 from dataclasses import dataclass
+from pathlib import Path
 from time import monotonic, sleep
+
+import yaml
 
 from ..algorithms import AutonomyProfile1, PauseProfile, TeleoperationProfile, TeleopSlamProfile
 from ..interfaces import AlgorithmContext, OperationProfile
@@ -34,10 +37,12 @@ class ControllerService:
         robot_client: RobotClient,
         context: AlgorithmContext,
         slam_service=None,
+        state_file: Path | str | None = None,
     ) -> None:
         self._robot = robot_client
         self._context = context
         self._slam_service = slam_service
+        self._state_file = Path(state_file) if state_file else None
         self._profiles: dict[ControlMode, OperationProfile] = {
             ControlMode.PAUSE: PauseProfile(),
             ControlMode.TELEOPERATION: TeleoperationProfile(),
@@ -45,6 +50,7 @@ class ControllerService:
             ControlMode.AUTONOMY_PROFILE_1: AutonomyProfile1(),
         }
         self._active_mode = ControlMode.PAUSE
+        self._restore_mode_from_state()
         self._manual = ManualInputState()
         self._ui = TeleopUiState()
         self._last_telemetry = TelemetryFrame()
@@ -62,6 +68,29 @@ class ControllerService:
         with self._lock:
             return self._active_mode
 
+    def _restore_mode_from_state(self) -> None:
+        if not self._state_file or not self._state_file.exists():
+            return
+        try:
+            with self._state_file.open("r", encoding="utf-8") as f:
+                data = yaml.safe_load(f) or {}
+            mode_raw = data.get("mode")
+            if mode_raw and mode_raw in [m.value for m in ControlMode]:
+                self._active_mode = ControlMode(mode_raw)
+                LOGGER.info("Restored control mode from state: %s", mode_raw)
+        except Exception as e:
+            LOGGER.debug("Could not restore mode from %s: %s", self._state_file, e)
+
+    def _save_mode_to_state(self, mode: ControlMode) -> None:
+        if not self._state_file:
+            return
+        try:
+            self._state_file.parent.mkdir(parents=True, exist_ok=True)
+            with self._state_file.open("w", encoding="utf-8") as f:
+                yaml.safe_dump({"mode": mode.value}, f, allow_unicode=True)
+        except Exception as e:
+            LOGGER.warning("Could not save mode to %s: %s", self._state_file, e)
+
     def set_mode(self, mode_raw: str) -> ControlMode:
         mode = ControlMode(mode_raw)
         with self._lock:
@@ -70,6 +99,7 @@ class ControllerService:
                 self._profiles[self._active_mode].algorithm.on_exit(self._context)
                 self._profiles[mode].algorithm.on_enter(self._context)
                 self._active_mode = mode
+                self._save_mode_to_state(mode)
                 LOGGER.info("Control mode changed: %s -> %s", prev_mode.value, mode.value)
         return mode
 

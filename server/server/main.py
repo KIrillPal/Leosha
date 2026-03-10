@@ -48,7 +48,10 @@ def build_runtime(config_path: str, transport: str = ""):
     context = AlgorithmContext(head_sensitivity=cfg.control.head_sensitivity)
     slam_service = SlamService(robot)
     ros_graph = RosGraphService()
-    controller = ControllerService(robot, context=context, slam_service=slam_service)
+    state_file = Path(config_path).resolve().parent / "server_state.yaml"
+    controller = ControllerService(
+        robot, context=context, slam_service=slam_service, state_file=state_file
+    )
     app = create_app(controller, robot, cfg, slam_service=slam_service, ros_graph=ros_graph)
     return cfg, app, controller, robot, slam_service, ros_graph
 
@@ -75,6 +78,7 @@ def main() -> None:
         slam_service=slam_service,
         robot_client=robot,
         odom_confidence_threshold=cfg.slam.odom_confidence_threshold,
+        get_control_mode=lambda: controller.active_mode,
     )
     ros_bridge.start()
     controller.start_command_loop(cfg.app.command_hz)

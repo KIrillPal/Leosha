@@ -14,12 +14,14 @@ class Ros2ServerBridge:
         slam_service=None,
         robot_client=None,
         odom_confidence_threshold: float = 0.5,
+        get_control_mode=None,
     ) -> None:
         self._enabled = False
         self._node = None
         self._slam_service = slam_service
         self._robot_client = robot_client
         self._odom_confidence_threshold = odom_confidence_threshold
+        self._get_control_mode = get_control_mode
         self._scan_pub = None
         self._scan_timer = None
         self._spin_thread = None
@@ -90,8 +92,20 @@ class Ros2ServerBridge:
             return (float(x), float(y), float(theta))
         return (float(telem.odom_x), float(telem.odom_y), float(telem.odom_yaw))
 
+    def _is_teleop_slam(self) -> bool:
+        """True only when current mode is TELEOP_SLAM; otherwise False (do not feed slam_toolbox in pause/teleop)."""
+        if self._get_control_mode is None:
+            return False
+        try:
+            from ..models import ControlMode
+            return self._get_control_mode() == ControlMode.TELEOP_SLAM
+        except Exception:
+            return False
+
     def _publish_odom_tf(self) -> None:
         """Publish odom->base_link from robot odometry or SLAM pose (required by slam_toolbox)."""
+        if not self._is_teleop_slam():
+            return
         if not self._robot_client or not getattr(self, "_tf_broadcaster", None):
             return
         try:
@@ -114,6 +128,8 @@ class Ros2ServerBridge:
             LOGGER.debug("Odom TF publish error: %s", e)
 
     def _publish_scan(self) -> None:
+        if not self._is_teleop_slam():
+            return
         scan = self._robot_client.get_latest_lidar_scan() if self._robot_client else None
         if not scan or not isinstance(scan.get("ranges"), (list, tuple)):
             return

@@ -11,3 +11,6 @@ build
 install
 log
 notes
+
+# server runtime state (persisted mode)
+**/server_state.yaml
