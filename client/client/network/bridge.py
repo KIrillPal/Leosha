@@ -81,8 +81,7 @@ class ZmqBridge:
 
         self._command_sub = self._ctx.socket(zmq.SUB)
         self._command_sub.setsockopt_string(zmq.SUBSCRIBE, "")
-        self._command_sub.setsockopt(zmq.RCVHWM, int(recv_high_water_mark))
-        self._command_sub.setsockopt(zmq.CONFLATE, 1)
+        self._command_sub.setsockopt(zmq.RCVHWM, max(50, int(recv_high_water_mark)))
         self._command_sub.setsockopt(zmq.RCVTIMEO, int(recv_timeout_ms))
         self._command_sub.connect(f"tcp://{server_host}:{int(command_port)}")
 
@@ -107,7 +106,11 @@ class ZmqBridge:
             raw = self._command_sub.recv(flags=self._zmq.NOBLOCK)
         except self._zmq.Again:
             return None
-        packet = unpack_server_packet(raw)
+        try:
+            packet = unpack_server_packet(raw)
+        except Exception as exc:
+            LOGGER.warning("Command unpack error (malformed packet?): %s", exc)
+            return None
         self._stats.rx_packets += 1
         return packet
 
