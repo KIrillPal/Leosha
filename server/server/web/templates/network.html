@@ -8,6 +8,25 @@
         <p>Latency: <span class="metric" id="latency">-</span> ms</p>
         <p>TX: <span class="metric" id="txBps">-</span> B/s, <span id="txPps">-</span> pkt/s</p>
         <p>RX: <span class="metric" id="rxBps">-</span> B/s, <span id="rxPps">-</span> pkt/s</p>
+        <p><strong>Пакетов в секунду:</strong> RX <span class="metric" id="rxPpsLabel">-</span> pkt/s, TX <span class="metric" id="txPpsLabel">-</span> pkt/s</p>
+    </div>
+    <div class="card">
+        <h3>Средний размер частей пакета (байт)</h3>
+        <p class="hint">Соотношение объёмов: лидар, IMU, конфиг робота, камера.</p>
+        <div class="packet-bar-wrap" style="margin:10px 0;">
+            <div id="packetBar" class="packet-bar" style="display:flex;height:28px;border-radius:8px;overflow:hidden;background:#e5e7eb;">
+                <span id="segLidar" title="Лидар" style="min-width:2px;background:#059669;"></span>
+                <span id="segImu" title="IMU" style="min-width:2px;background:#2563eb;"></span>
+                <span id="segConfig" title="Конфиг робота" style="min-width:2px;background:#d97706;"></span>
+                <span id="segCamera" title="Камера" style="min-width:2px;background:#dc2626;"></span>
+            </div>
+        </div>
+        <div class="packet-legend" style="display:flex;flex-wrap:wrap;gap:12px;font-size:13px;color:#6b7280;">
+            <span>Лидар: <strong id="partLidar">0</strong> B</span>
+            <span>IMU: <strong id="partImu">0</strong> B</span>
+            <span>Конфиг: <strong id="partConfig">0</strong> B</span>
+            <span>Камера: <strong id="partCamera">0</strong> B</span>
+        </div>
     </div>
     <div class="card">
         <h3>Grafana</h3>
@@ -19,7 +38,29 @@
 </div>
 <div class="card" id="grafanaWrap" style="display:none;"><iframe id="grafanaFrame" style="width:100%;height:450px;border:none;"></iframe></div>
 <script>
-async function refreshNetworkStats(){const d=await (await fetch('/api/network/stats')).json();rssi.textContent=d.rssi_dbm;latency.textContent=d.latency_ms;txBps.textContent=d.tx_bytes_per_sec;rxBps.textContent=d.rx_bytes_per_sec;txPps.textContent=d.tx_packets_per_sec;rxPps.textContent=d.rx_packets_per_sec;}
+async function refreshNetworkStats(){
+    const d=await (await fetch('/api/network/stats')).json();
+    rssi.textContent=d.rssi_dbm;
+    latency.textContent=d.latency_ms;
+    txBps.textContent=d.tx_bytes_per_sec;
+    rxBps.textContent=d.rx_bytes_per_sec;
+    txPps.textContent=d.tx_packets_per_sec;
+    rxPps.textContent=d.rx_packets_per_sec;
+    rxPpsLabel.textContent=d.rx_packets_per_sec;
+    txPpsLabel.textContent=d.tx_packets_per_sec;
+    const parts = d.avg_packet_parts || {};
+    const lidar = Number(parts.lidar)||0, imu = Number(parts.imu)||0, config = Number(parts.config)||0, camera = Number(parts.camera)||0;
+    const total = lidar + imu + config + camera;
+    document.getElementById('partLidar').textContent = Math.round(lidar);
+    document.getElementById('partImu').textContent = Math.round(imu);
+    document.getElementById('partConfig').textContent = Math.round(config);
+    document.getElementById('partCamera').textContent = Math.round(camera);
+    const pct = (v) => total > 0 ? (v / total * 100) : 0;
+    document.getElementById('segLidar').style.flex = pct(lidar) + ' 1 0%';
+    document.getElementById('segImu').style.flex = pct(imu) + ' 1 0%';
+    document.getElementById('segConfig').style.flex = pct(config) + ' 1 0%';
+    document.getElementById('segCamera').style.flex = pct(camera) + ' 1 0%';
+}
 function embedGrafana(){const url=grafanaUrl.value.trim();if(!url)return;grafanaFrame.src=url;grafanaWrap.style.display='block';}
 if (grafanaUrl.value.trim()) embedGrafana();
 refreshNetworkStats();setInterval(refreshNetworkStats,1000);

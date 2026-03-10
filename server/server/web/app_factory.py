@@ -158,6 +158,7 @@ def create_app(controller: ControllerService, robot_client: RobotClient, config:
     @app.get("/api/network/stats")
     def get_network_stats():
         stats = robot_client.get_network_stats()
+        parts = robot_client.get_avg_packet_parts()
         return jsonify({
             "rssi_dbm": round(stats.rssi_dbm, 2),
             "latency_ms": round(stats.latency_ms, 2),
@@ -165,6 +166,7 @@ def create_app(controller: ControllerService, robot_client: RobotClient, config:
             "rx_bytes_per_sec": round(stats.rx_bytes_per_sec, 2),
             "tx_packets_per_sec": round(stats.tx_packets_per_sec, 2),
             "rx_packets_per_sec": round(stats.rx_packets_per_sec, 2),
+            "avg_packet_parts": {k: round(v, 1) for k, v in parts.items()},
         })
 
     @app.get("/api/lidar")

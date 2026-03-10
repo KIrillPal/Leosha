@@ -190,13 +190,15 @@ def pack_scan(scan: LaserScan | None) -> dict | None:
 
 def pack_telemetry_packet(packet: TelemetryPacket) -> tuple[bytes, bytes]:
     """Упаковка телеметрии в multipart: header(msgpack) + jpeg bytes."""
+    scan_data = pack_scan(packet.scan)
+    imu_data = [_pack_imu(i) for i in packet.imu_readings]
     header = {
         "seq": packet.seq,
         "timestamp_ns": packet.timestamp_ns,
         "mode": packet.mode.value,
         "status": packet.status.value,
-        "scan": pack_scan(packet.scan),
-        "imu_readings": [_pack_imu(i) for i in packet.imu_readings],
+        "scan": scan_data,
+        "imu_readings": imu_data,
         "odometry": _pack_odometry(packet.odometry),
         "ultrasonic_range_m": packet.ultrasonic_range_m,
         "battery_voltage": packet.battery_voltage,
@@ -210,6 +212,13 @@ def pack_telemetry_packet(packet: TelemetryPacket) -> tuple[bytes, bytes]:
     }
     if packet.robot_config is not None:
         header["robot_config"] = packet.robot_config
+    # Размеры частей пакета для отображения на сервере (среднее по пакетам)
+    header["parts_bytes"] = {
+        "lidar": len(msgpack.packb(scan_data, use_bin_type=True)) if scan_data else 0,
+        "imu": len(msgpack.packb(imu_data, use_bin_type=True)),
+        "config": len(msgpack.packb(header["robot_config"], use_bin_type=True)) if packet.robot_config else 0,
+        "camera": len(packet.frame_jpeg),
+    }
     return msgpack.packb(header, use_bin_type=True), packet.frame_jpeg
 
 

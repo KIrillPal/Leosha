@@ -36,6 +36,7 @@ class RobotClient(Protocol):
     def get_latest_lidar_scan(self) -> dict | None: ...
     def get_network_stats(self) -> NetworkStats: ...
     def get_robot_config(self) -> dict | None: ...
+    def get_avg_packet_parts(self) -> dict[str, float]: ...
 
 
 @dataclass
@@ -118,6 +119,8 @@ class ZmqRobotClient:
         self._latest_lidar_scan: dict | None = None
         self._robot_config: dict | None = None
         self._counters = _Counters()
+        self._avg_parts: dict[str, float] = {"lidar": 0.0, "imu": 0.0, "config": 0.0, "camera": 0.0}
+        self._avg_parts_alpha = 0.15
         self._network = NetworkStats()
         self._cmd_seq = 0
         self._rx_total = 0
@@ -201,6 +204,10 @@ class ZmqRobotClient:
             self._network.rx_packets_per_sec = self._counters.rx_packets / dt
             self._counters = _Counters(last_t=now)
             return NetworkStats(**self._network.__dict__)
+
+    def get_avg_packet_parts(self) -> dict[str, float]:
+        with self._lock:
+            return dict(self._avg_parts)
 
     def close(self) -> None:
         self._stop.set()
@@ -307,6 +314,11 @@ class ZmqRobotClient:
             self._network.rssi_dbm = float(header.get("wifi_rssi_dbm", -50.0))
             if "robot_config" in header and isinstance(header["robot_config"], dict):
                 self._robot_config = header["robot_config"]
+            parts = header.get("parts_bytes")
+            if isinstance(parts, dict):
+                for key in self._avg_parts:
+                    new_val = float(parts.get(key, 0))
+                    self._avg_parts[key] = (1.0 - self._avg_parts_alpha) * self._avg_parts[key] + self._avg_parts_alpha * new_val
 
         rx = self._rx_total
         if rx <= 3 or rx % 300 == 0:
@@ -391,6 +403,9 @@ class MockRobotClient:
 
     def get_robot_config(self) -> dict | None:
         return None
+
+    def get_avg_packet_parts(self) -> dict[str, float]:
+        return {"lidar": 0.0, "imu": 0.0, "config": 0.0, "camera": 0.0}
 
     def get_network_stats(self) -> NetworkStats:
         with self._lock:
