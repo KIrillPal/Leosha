@@ -85,8 +85,8 @@ class Ros2ServerBridge:
         """(x, y, yaw) for odom->base_link: from SLAM if odom_confidence < threshold, else from telemetry."""
         telem = self._robot_client.get_latest_telemetry()
         if (
-            self._slam_service and 
-            telem.odom_confidence < self._odom_confidence_threshold
+            self._slam_service
+            and telem.odom_confidence < self._odom_confidence_threshold
         ):
             x, y, theta = self._slam_service.get_pose()
             return (float(x), float(y), float(theta))
@@ -97,7 +97,7 @@ class Ros2ServerBridge:
         if self._get_control_mode is None:
             return False
         try:
-            from ..models import ControlMode
+            from .models import ControlMode
             return self._get_control_mode() == ControlMode.TELEOP_SLAM
         except Exception:
             return False

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import io
 import logging
+import math
 import threading
 from dataclasses import dataclass, field
 from time import monotonic
@@ -11,6 +12,16 @@ from time import monotonic
 from ..models import SlamStats
 
 LOGGER = logging.getLogger(__name__)
+
+
+@dataclass
+class MapMeta:
+    """OccupancyGrid metadata for world↔pixel conversion."""
+    resolution: float = 0.05
+    origin_x: float = 0.0
+    origin_y: float = 0.0
+    width: int = 0
+    height: int = 0
 
 
 @dataclass
@@ -22,6 +33,7 @@ class _SlamState:
     last_map_t: float = 0.0
     last_pose_t: float = 0.0
     map_png: bytes | None = None
+    map_meta: MapMeta = field(default_factory=MapMeta)
     pose_x: float = 0.0
     pose_y: float = 0.0
     pose_theta: float = 0.0
@@ -37,6 +49,7 @@ class SlamService:
         self._state = _SlamState()
         self._ros_enabled = False
         self._ros_subscribers = []
+        self._tf_buffer = None
 
     def set_ros_enabled(self, enabled: bool) -> None:
         self._ros_enabled = enabled
@@ -50,17 +63,19 @@ class SlamService:
                 self._state.last_scan_t = monotonic()
                 self._state.status = "mapping" if self._state.status == "initializing" else self._state.status
 
-    def update_map(self, map_png: bytes) -> None:
+    def update_map(self, map_png: bytes, meta: MapMeta | None = None) -> None:
         """Called when new map data arrives (e.g. from ROS subscriber)."""
         with self._lock:
             self._state.map_png = map_png
+            if meta is not None:
+                self._state.map_meta = meta
             self._state.map_updates += 1
             self._state.last_map_t = monotonic()
             if self._state.status == "initializing":
                 self._state.status = "mapping"
 
     def update_pose(self, x: float, y: float, theta: float) -> None:
-        """Called when new pose arrives (e.g. from ROS subscriber)."""
+        """Called when new pose arrives (e.g. from TF lookup)."""
         with self._lock:
             self._state.pose_x = x
             self._state.pose_y = y
@@ -74,14 +89,11 @@ class SlamService:
         with self._lock:
             s = self._state
             now = monotonic()
-            # FPS: scans per second over last second
             scan_dt = now - s.last_scan_t if s.last_scan_t > 0 else 1.0
             fps = 1.0 / scan_dt if scan_dt < 2.0 and s.scan_count > 0 else 0.0
-            # Use map update rate if we have it
             if s.map_updates > 0 and s.last_map_t > 0:
                 map_dt = now - s.last_map_t
                 fps = 1.0 / map_dt if map_dt < 2.0 else fps
-            # Latency: time since last update
             latency_ms = (now - max(s.last_scan_t, s.last_map_t, s.last_pose_t)) * 1000.0
             return SlamStats(
                 fps=round(fps, 2),
@@ -96,22 +108,46 @@ class SlamService:
         with self._lock:
             return self._state.map_png
 
+    def get_map_meta(self) -> MapMeta:
+        with self._lock:
+            return self._state.map_meta
+
     def get_pose(self) -> tuple[float, float, float]:
         with self._lock:
             return (self._state.pose_x, self._state.pose_y, self._state.pose_theta)
 
-    def try_subscribe_ros(self, node) -> bool:
-        """Subscribe to /map and pose when rclpy node is available. Returns True if subscribed."""
+    def _tf_lookup_pose(self) -> None:
+        """Periodic TF lookup: map → base_footprint for SLAM pose."""
+        if self._tf_buffer is None:
+            return
         try:
-            from geometry_msgs.msg import PoseWithCovarianceStamped
-            from nav_msgs.msg import OccupancyGrid
-            from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy
+            from rclpy.time import Time
+            tf = self._tf_buffer.lookup_transform("map", "base_footprint", Time())
+            t = tf.transform.translation
+            r = tf.transform.rotation
+            siny_cosp = 2.0 * (r.w * r.z + r.x * r.y)
+            cosy_cosp = 1.0 - 2.0 * (r.y * r.y + r.z * r.z)
+            theta = math.atan2(siny_cosp, cosy_cosp)
+            self.update_pose(float(t.x), float(t.y), theta)
+        except Exception:
+            pass
 
-            qos = QoSProfile(
-                reliability=ReliabilityPolicy.BEST_EFFORT,
+    def try_subscribe_ros(self, node) -> bool:
+        """Subscribe to /map and set up TF listener for pose. Returns True if subscribed."""
+        try:
+            from nav_msgs.msg import OccupancyGrid
+            from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, DurabilityPolicy
+            from tf2_ros import Buffer, TransformListener
+
+            map_qos = QoSProfile(
+                reliability=ReliabilityPolicy.RELIABLE,
                 history=HistoryPolicy.KEEP_LAST,
                 depth=1,
+                durability=DurabilityPolicy.TRANSIENT_LOCAL,
             )
+
+            self._tf_buffer = Buffer()
+            self._tf_listener = TransformListener(self._tf_buffer, node)
 
             def on_map(msg: OccupancyGrid) -> None:
                 try:
@@ -120,38 +156,31 @@ class SlamService:
                     w, h = msg.info.width, msg.info.height
                     if w <= 0 or h <= 0:
                         return
+                    meta = MapMeta(
+                        resolution=float(msg.info.resolution),
+                        origin_x=float(msg.info.origin.position.x),
+                        origin_y=float(msg.info.origin.position.y),
+                        width=w,
+                        height=h,
+                    )
                     arr = np.array(msg.data, dtype=np.int8).reshape((h, w))
-                    # -1=unknown, 0=free, 100=occupied
                     img_arr = np.zeros((h, w, 3), dtype=np.uint8)
                     img_arr[arr == -1] = [128, 128, 128]
                     img_arr[arr == 0] = [255, 255, 255]
                     img_arr[arr == 100] = [0, 0, 0]
-                    img = Image.fromarray(img_arr, mode="RGB")
+                    img = Image.fromarray(np.flipud(img_arr), mode="RGB")
                     buf = io.BytesIO()
                     img.save(buf, format="PNG")
-                    self.update_map(buf.getvalue())
+                    self.update_map(buf.getvalue(), meta)
                 except Exception as e:
                     LOGGER.debug("Map conversion error: %s", e)
 
-            def on_pose(msg: PoseWithCovarianceStamped) -> None:
-                p = msg.pose.pose.position
-                o = msg.pose.pose.orientation
-                import math
-                siny_cosp = 2 * (o.w * o.z + o.x * o.y)
-                cosy_cosp = 1 - 2 * (o.y * o.y + o.z * o.z)
-                theta = math.atan2(siny_cosp, cosy_cosp)
-                self.update_pose(float(p.x), float(p.y), theta)
+            node.create_subscription(OccupancyGrid, "/map", on_map, map_qos)
+            node.create_timer(0.2, self._tf_lookup_pose)  # 5 Hz TF lookup
 
-            node.create_subscription(OccupancyGrid, "/map", on_map, qos)
-            node.create_subscription(
-                PoseWithCovarianceStamped,
-                "/slam_toolbox/pose",
-                on_pose,
-                qos,
-            )
             self._ros_subscribers.append("map")
-            self._ros_subscribers.append("pose")
-            LOGGER.info("SLAM service subscribed to ROS /map and /slam_toolbox/pose")
+            self._ros_subscribers.append("tf_pose")
+            LOGGER.info("SLAM service: subscribed /map (RELIABLE+TRANSIENT_LOCAL), TF listener for pose")
             return True
         except Exception as e:
             LOGGER.debug("SLAM ROS subscribe failed (slam_toolbox may not be running): %s", e)

@@ -5,7 +5,10 @@
     .slam-wrap { display: grid; gap: 12px; grid-template-columns: 1fr 280px; }
     .slam-card { background: #0a0f1e; border: 1px solid #1e293b; border-radius: 12px; padding: 12px; }
     .slam-side { background: white; border: 1px solid #e5e7eb; border-radius: 12px; padding: 12px; }
-    #mapCanvas { width: 100%; height: 70vh; display: block; border-radius: 10px; background: #1e293b; }
+    #mapCanvas {
+        width: 100%; height: 70vh; display: block; border-radius: 10px; background: #1e293b;
+        image-rendering: pixelated; image-rendering: crisp-edges;
+    }
     .metric-row { margin: 8px 0; }
     .metric-name { color: #6b7280; font-size: 13px; }
     .metric-value { font-size: 20px; font-weight: 700; }
@@ -37,26 +40,128 @@
 const mapCanvas = document.getElementById('mapCanvas');
 const ctx = mapCanvas.getContext('2d');
 let mapImg = null;
+let lastPose = null;
+let lastMeta = null;
+
+const ROBOT = {
+    body_length: 0.19, body_width: 0.18,
+    head_x: 0.12, head_y: 0.0,
+    neck_min_deg: -45, neck_max_deg: 45,
+};
 
 function resizeCanvas() {
     const rect = mapCanvas.getBoundingClientRect();
     mapCanvas.width = Math.max(320, Math.floor(rect.width));
     mapCanvas.height = Math.max(320, Math.floor(rect.height));
-    if (mapImg) drawMap();
+    drawScene();
 }
 
-function drawMap() {
+function drawScene() {
     const w = mapCanvas.width;
     const h = mapCanvas.height;
     ctx.fillStyle = '#1e293b';
     ctx.fillRect(0, 0, w, h);
     if (!mapImg) return;
+
     const scale = Math.min(w / mapImg.width, h / mapImg.height);
     const sw = mapImg.width * scale;
     const sh = mapImg.height * scale;
     const sx = (w - sw) / 2;
     const sy = (h - sh) / 2;
+
+    ctx.imageSmoothingEnabled = false;
     ctx.drawImage(mapImg, sx, sy, sw, sh);
+
+    if (lastPose && lastMeta && lastMeta.resolution > 0) {
+        drawRobot(sx, sy, scale);
+    }
+}
+
+function worldToCanvas(wx, wy, sx, sy, scale) {
+    const meta = lastMeta;
+    const px = (wx - meta.origin_x) / meta.resolution;
+    const py = meta.height - 1 - (wy - meta.origin_y) / meta.resolution;
+    return { x: sx + px * scale, y: sy + py * scale };
+}
+
+function drawRobot(sx, sy, scale) {
+    const pose = lastPose;
+    const meta = lastMeta;
+    const c = worldToCanvas(pose.x, pose.y, sx, sy, scale);
+
+    const metersToPixels = scale / meta.resolution;
+    const bw = ROBOT.body_width * metersToPixels;
+    const bl = ROBOT.body_length * metersToPixels;
+    const bodyAngle = -pose.theta;
+
+    ctx.save();
+    ctx.translate(c.x, c.y);
+    ctx.rotate(bodyAngle);
+
+    ctx.strokeStyle = 'rgba(0, 120, 255, 0.85)';
+    ctx.lineWidth = Math.max(1.5, metersToPixels * 0.008);
+    ctx.fillStyle = 'rgba(0, 120, 255, 0.18)';
+    ctx.beginPath();
+    ctx.rect(-bl / 2, -bw / 2, bl, bw);
+    ctx.fill();
+    ctx.stroke();
+
+    const arrowLen = bl * 0.7;
+    ctx.strokeStyle = 'rgba(0, 120, 255, 0.9)';
+    ctx.lineWidth = Math.max(2, metersToPixels * 0.012);
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(arrowLen, 0);
+    ctx.stroke();
+    const headSize = Math.max(4, metersToPixels * 0.02);
+    ctx.fillStyle = 'rgba(0, 120, 255, 0.9)';
+    ctx.beginPath();
+    ctx.moveTo(arrowLen + headSize, 0);
+    ctx.lineTo(arrowLen - headSize * 0.6, -headSize * 0.6);
+    ctx.lineTo(arrowLen - headSize * 0.6, headSize * 0.6);
+    ctx.closePath();
+    ctx.fill();
+
+    const headPanRad = (pose.head_pan_deg || 0) * Math.PI / 180;
+    const headOffX = ROBOT.head_x * metersToPixels;
+    const fovLen = bl * 0.6;
+
+    ctx.save();
+    ctx.translate(headOffX, 0);
+    ctx.rotate(headPanRad);
+
+    ctx.strokeStyle = 'rgba(255, 80, 80, 0.8)';
+    ctx.lineWidth = Math.max(1.5, metersToPixels * 0.008);
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(fovLen, 0);
+    ctx.stroke();
+
+    const fovHalf = 30 * Math.PI / 180;
+    ctx.fillStyle = 'rgba(255, 80, 80, 0.12)';
+    ctx.strokeStyle = 'rgba(255, 80, 80, 0.35)';
+    ctx.lineWidth = Math.max(1, metersToPixels * 0.005);
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.arc(0, 0, fovLen, -fovHalf, fovHalf);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    const dotR = Math.max(2.5, metersToPixels * 0.012);
+    ctx.fillStyle = 'rgba(255, 80, 80, 0.9)';
+    ctx.beginPath();
+    ctx.arc(0, 0, dotR, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.restore();
+
+    ctx.fillStyle = 'rgba(0, 120, 255, 0.95)';
+    ctx.beginPath();
+    ctx.arc(0, 0, Math.max(3, metersToPixels * 0.015), 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.restore();
 }
 
 async function refreshSlam() {
@@ -79,17 +184,19 @@ async function refreshSlam() {
     }
     const pose = await poseResp.json();
     if (pose.success) {
+        lastPose = pose;
+        lastMeta = pose.map_meta || null;
         document.getElementById('slamPose').textContent =
-            `${pose.x.toFixed(2)}, ${pose.y.toFixed(2)}, ${(pose.theta * 180 / Math.PI).toFixed(1)}°`;
+            `${pose.x.toFixed(3)}, ${pose.y.toFixed(3)}, ${(pose.theta * 180 / Math.PI).toFixed(1)}°`;
     }
     if (mapResp.ok && mapResp.headers.get('content-type')?.includes('image')) {
         const blob = await mapResp.blob();
         const url = URL.createObjectURL(blob);
-        mapImg = new Image();
-        mapImg.onload = () => { drawMap(); URL.revokeObjectURL(url); };
-        mapImg.src = url;
-    } else if (!mapImg) {
-        drawMap();
+        const img = new Image();
+        img.onload = () => { mapImg = img; drawScene(); URL.revokeObjectURL(url); };
+        img.src = url;
+    } else {
+        drawScene();
     }
 }
 

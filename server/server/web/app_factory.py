@@ -212,7 +212,20 @@ def create_app(
         if slam_service is None:
             return jsonify({"success": False})
         x, y, theta = slam_service.get_pose()
-        return jsonify({"success": True, "x": x, "y": y, "theta": theta})
+        meta = slam_service.get_map_meta()
+        cmd = controller.get_ui_status().get("command", {})
+        return jsonify({
+            "success": True,
+            "x": x, "y": y, "theta": theta,
+            "head_pan_deg": cmd.get("head_pan_deg", 0.0),
+            "map_meta": {
+                "resolution": meta.resolution,
+                "origin_x": meta.origin_x,
+                "origin_y": meta.origin_y,
+                "width": meta.width,
+                "height": meta.height,
+            },
+        })
 
     @app.get("/api/ros/graph")
     def get_ros_graph():
