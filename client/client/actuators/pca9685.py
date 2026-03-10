@@ -86,10 +86,13 @@ class Pca9685ActuatorDriver:
     def _clamp(v: float, lo: float, hi: float) -> float:
         return max(lo, min(hi, float(v)))
 
-    def _speed_to_motor_throttle(self, speed_cmd: float) -> float:
-        speed_cmd = self._clamp(speed_cmd, -1.0, 1.0)
-        throttle = float(self._cfg.motor.zero_throttle) + speed_cmd * float(self._cfg.motor.speed_to_throttle_ratio)
-        return self._clamp(throttle, -1.0, 1.0)
+    def _speed_to_motor_throttle(self, throttle_cmd: float) -> float:
+        """Прямое управление мотором по throttle, присланному сервером.
+
+        Сервер выбирает нужное значение в диапазоне [-1.0, 1.0],
+        а здесь мы лишь ограничиваем его для драйвера PCA9685.
+        """
+        return self._clamp(throttle_cmd, -1.0, 1.0)
 
     def _steer_to_wheel_input(self, steer_cmd: float) -> float:
         steer_cmd = self._clamp(steer_cmd, -1.0, 1.0)

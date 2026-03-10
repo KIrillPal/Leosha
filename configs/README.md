@@ -194,10 +194,7 @@ python -m server --config /path/to/Leosha/code/configs/server.yaml
 
 | Аргумент | Тип | Описание |
 |----------|-----|----------|
-| `max_speed_normal` | float | Максимальная скорость в обычном режиме (норм. 0..1) |
-| `max_speed_fast` | float | Максимальная скорость в быстром режиме |
-| `max_steering` | float | Максимальный угол поворота (норм.) |
-| `head_sensitivity` | float | Чувствительность управления головой (мышь) |
+| `head_sensitivity` | float | Чувствительность управления головой (мышь). Руление задаётся в норм. ±1, фактический диапазон — из конфига клиента `actuators.wheel` (min_throttle, max_throttle, zero_throttle). |
 
 ### network
 

@@ -22,9 +22,6 @@ class RobotSection:
 
 @dataclass
 class ControlSection:
-    max_speed_normal: float
-    max_speed_fast: float
-    max_steering: float
     head_sensitivity: float
 
 

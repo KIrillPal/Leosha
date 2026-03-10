@@ -20,6 +20,7 @@ class PauseAlgorithm(ControlAlgorithm):
         context: AlgorithmContext,
         manual: ManualInputState,
         telemetry: TelemetryFrame,
+        robot_config: dict | None = None,
     ) -> ControlCommand:
         return ControlCommand(mode=self.mode)
 
@@ -42,21 +43,28 @@ class SlamTeleoperationAlgorithm(ControlAlgorithm):
         context: AlgorithmContext,
         manual: ManualInputState,
         telemetry: TelemetryFrame,
+        robot_config: dict | None = None,
     ) -> ControlCommand:
         if not manual.tracking_enabled:
             return ControlCommand(mode=self.mode, head_pan=self._head_pan, head_tilt=self._head_tilt)
 
+        # Throttle из конфига клиента (actuators.motor); при отсутствии конфига — дефолты
+        motor = (robot_config or {}).get("actuators", {}).get("motor") or {}
+        forward = float(motor.get("forward_throttle", 0.43))
+        backward = float(motor.get("backward_throttle", -0.33))
+        forward_fast = float(motor.get("forward_fast_throttle", 0.69))
+
         speed = 0.0
         steering = 0.0
-        speed_limit = context.max_speed_fast if manual.shift else context.max_speed_normal
         if manual.w and not manual.s:
-            speed = speed_limit
+            speed = forward_fast if manual.shift else forward
         elif manual.s and not manual.w:
-            speed = -speed_limit
+            speed = backward
+        # Нормализованное руление ±1.0; клиент мапит в диапазон по actuators.wheel (min/max/zero)
         if manual.a and not manual.d:
-            steering = -context.max_steering
+            steering = -1.0
         elif manual.d and not manual.a:
-            steering = context.max_steering
+            steering = 1.0
 
         steering *= max(0.55, 1.0 - abs(telemetry.imu_yaw_rate) * 0.2)
         self._head_pan = max(-1.0, min(1.0, self._head_pan + manual.head_dx * context.head_sensitivity))
@@ -91,6 +99,7 @@ class PlaceholderAutonomyAlgorithm(AutonomyAlgorithm):
         context: AlgorithmContext,
         manual: ManualInputState,
         telemetry: TelemetryFrame,
+        robot_config: dict | None = None,
     ) -> ControlCommand:
         return ControlCommand(mode=self.mode)
 

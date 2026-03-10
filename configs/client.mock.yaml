@@ -29,7 +29,9 @@ actuators:
   motor:
     channel: 0
     zero_throttle: 0.05
-    speed_to_throttle_ratio: 0.85
+    forward_throttle: 0.43
+    backward_throttle: -0.33
+    forward_fast_throttle: 0.69
     pwm_min_pulse: 1000
     pwm_max_pulse: 2000
   wheel:

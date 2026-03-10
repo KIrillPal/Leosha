@@ -40,8 +40,8 @@ def test_pca_driver_maps_commands_using_head_car_calibration(monkeypatch, client
     driver = Pca9685ActuatorDriver(cfg, head_cfg)
     driver.apply(ActuatorCommand(motor_throttle=0.3, steering_throttle=1.0, head_pan_angle=10.0, head_tilt_angle=5.0))
 
-    # motor: zero + speed * ratio
-    expected_motor = cfg.motor.zero_throttle + 0.3 * cfg.motor.speed_to_throttle_ratio
+    # motor: direct throttle from server (clamped)
+    expected_motor = 0.3
     assert abs(driver._motor.throttle - expected_motor) < 1e-6
 
     # wheel: right turn -> max_throttle then inverted

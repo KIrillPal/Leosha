@@ -43,12 +43,7 @@ def _create_robot_client(cfg, transport: str):
 def build_runtime(config_path: str, transport: str = ""):
     cfg = load_server_config(config_path)
     robot = _create_robot_client(cfg, transport)
-    context = AlgorithmContext(
-        max_speed_normal=cfg.control.max_speed_normal,
-        max_speed_fast=cfg.control.max_speed_fast,
-        max_steering=cfg.control.max_steering,
-        head_sensitivity=cfg.control.head_sensitivity,
-    )
+    context = AlgorithmContext(head_sensitivity=cfg.control.head_sensitivity)
     controller = ControllerService(robot, context=context)
     app = create_app(controller, robot, cfg)
     return cfg, app, controller, robot

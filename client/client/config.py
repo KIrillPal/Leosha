@@ -177,7 +177,10 @@ class PcaConfig:
 class MotorActuatorConfig:
     channel: int = 0
     zero_throttle: float = 0.05
-    speed_to_throttle_ratio: float = 0.85
+    # Throttle для телеоперации (сервер читает из конфига и шлёт клиенту)
+    forward_throttle: float = 0.43
+    backward_throttle: float = -0.33
+    forward_fast_throttle: float = 0.69
     pwm_min_pulse: int = 1000
     pwm_max_pulse: int = 2000
 
@@ -392,7 +395,9 @@ def load_client_config(path: str) -> ClientConfig:
             motor=MotorActuatorConfig(
                 channel=int(motor_raw.get("channel", 0)),
                 zero_throttle=float(motor_raw.get("zero_throttle", 0.05)),
-                speed_to_throttle_ratio=float(motor_raw.get("speed_to_throttle_ratio", 0.85)),
+                forward_throttle=float(motor_raw.get("forward_throttle", 0.43)),
+                backward_throttle=float(motor_raw.get("backward_throttle", -0.33)),
+                forward_fast_throttle=float(motor_raw.get("forward_fast_throttle", 0.69)),
                 pwm_min_pulse=int(motor_raw.get("pwm_min_pulse", 1000)),
                 pwm_max_pulse=int(motor_raw.get("pwm_max_pulse", 2000)),
             ),

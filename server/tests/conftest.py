@@ -29,12 +29,7 @@ def runtime():
     cfg_path = _configs_dir() / "server.yaml"
     cfg = load_server_config(cfg_path)
     robot = MockRobotClient(ip=cfg.robot.ip)
-    context = AlgorithmContext(
-        max_speed_normal=cfg.control.max_speed_normal,
-        max_speed_fast=cfg.control.max_speed_fast,
-        max_steering=cfg.control.max_steering,
-        head_sensitivity=cfg.control.head_sensitivity,
-    )
+    context = AlgorithmContext(head_sensitivity=cfg.control.head_sensitivity)
     controller = ControllerService(robot, context=context)
     app = create_app(controller, robot, cfg)
     app.config.update(TESTING=True)

@@ -8,9 +8,6 @@ from .models import ControlCommand, ControlMode, ManualInputState, TelemetryFram
 
 @dataclass
 class AlgorithmContext:
-    max_speed_normal: float
-    max_speed_fast: float
-    max_steering: float
     head_sensitivity: float
 
 
@@ -37,6 +34,7 @@ class ControlAlgorithm(ABC):
         context: AlgorithmContext,
         manual: ManualInputState,
         telemetry: TelemetryFrame,
+        robot_config: dict | None = None,
     ) -> ControlCommand:
         raise NotImplementedError
 

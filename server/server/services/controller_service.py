@@ -147,8 +147,11 @@ class ControllerService:
 
     def tick_once(self) -> ControlCommand:
         telemetry = self._robot.get_latest_telemetry()
+        robot_config = self._robot.get_robot_config()
         with self._lock:
-            command = self._profiles[self._active_mode].algorithm.compute_command(self._context, self._manual, telemetry)
+            command = self._profiles[self._active_mode].algorithm.compute_command(
+                self._context, self._manual, telemetry, robot_config=robot_config
+            )
             self._manual.head_dx = 0.0
             self._manual.head_dy = 0.0
             self._last_telemetry = telemetry
