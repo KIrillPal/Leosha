@@ -51,8 +51,8 @@ function drawGrid(centerX, centerY, radiusPx, rangeMaxM) {
         ctx.arc(centerX, centerY, r, 0, Math.PI * 2);
         ctx.stroke();
     }
-    // 0° сверху, по часовой стрелке: угол данных -> угол отрисовки = angle - 90°
-    const dataToCanvas = (dataAngleRad) => dataAngleRad - Math.PI / 2;
+    // 0° сверху: угол данных -> угол отрисовки = angle + 90°
+    const dataToCanvas = (dataAngleRad) => dataAngleRad + Math.PI / 2;
     for (let deg = -180; deg < 180; deg += 30) {
         const a = dataToCanvas((deg * Math.PI) / 180);
         ctx.beginPath();
@@ -73,7 +73,7 @@ function drawGrid(centerX, centerY, radiusPx, rangeMaxM) {
         const y = centerY;
         ctx.fillText(label, x, y);
     }
-    // Углы в градусах: 0° сверху, по часовой стрелке
+    // Углы в градусах: 0° сверху
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     const labelRadius = radiusPx * 1.06;
@@ -107,8 +107,35 @@ function drawScan(scan) {
     const aMin = Number(scan.angle_min || 0);
     const aInc = Number(scan.angle_increment || 0);
     const shadowWidth = (5 * Math.PI) / 180;
-    // 0° сверху, углы по часовой стрелке: canvas_angle = data_angle - 90°
-    const dataToCanvas = (dataAngleRad) => dataAngleRad - Math.PI / 2;
+    // 0° сверху: canvas_angle = data_angle + 90°
+    const dataToCanvas = (dataAngleRad) => dataAngleRad + Math.PI / 2;
+
+    // #region agent log
+    try {
+        fetch('http://localhost:7818/ingest/a3972696-7a4a-4321-8f58-191d44eb5c1e', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Debug-Session-Id': 'e731ba',
+            },
+            body: JSON.stringify({
+                sessionId: 'e731ba',
+                runId: 'pre-fix',
+                hypothesisId: 'H1_H2',
+                location: 'server/web/templates/lidar.html:drawScan',
+                message: 'lidar_scan_angles_before_draw',
+                data: {
+                    angle_min_deg: aMin * 180 / Math.PI,
+                    angle_inc_deg: aInc * 180 / Math.PI,
+                    count: ranges.length,
+                },
+                timestamp: Date.now(),
+            }),
+        }).catch(() => {});
+    } catch (e) {
+        // ignore
+    }
+    // #endregion agent log
 
     for (let i = 0; i < ranges.length; i += 1) {
         const dist = Number(ranges[i]);
