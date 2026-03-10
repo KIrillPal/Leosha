@@ -116,6 +116,7 @@ sensors:
     range_max_m: 5.0
     intensity_enabled: true
     invert_angle: true
+    zero_angle_deg: -90
     healthcheck_timeout_sec: 3.0
     healthcheck_test_timeout_sec: 30.0
     healthcheck_min_points: 32

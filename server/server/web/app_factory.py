@@ -174,6 +174,14 @@ def create_app(controller: ControllerService, robot_client: RobotClient, config:
         scan = robot_client.get_latest_lidar_scan()
         if scan is None:
             return jsonify({"success": False, "scan": None})
-        return jsonify({"success": True, "scan": scan})
+        invert_angle = False
+        try:
+            cfg = robot_client.get_robot_config()
+            if cfg:
+                lidar_cfg = (cfg.get("sensors") or {}).get("lidar") or {}
+                invert_angle = bool(lidar_cfg.get("invert_angle", False))
+        except Exception:
+            invert_angle = False
+        return jsonify({"success": True, "scan": scan, "invert_angle": invert_angle})
 
     return app

@@ -154,17 +154,19 @@ class TMiniProPlusLidarThread(threading.Thread):
         if len(points) < 2:
             raise RuntimeError("not enough points")
         s = -1 if bool(self._cfg.invert_angle) else 1
-        angles = [s * float(p.angle) for p in points]
+        zero_rad = math.radians(float(self._cfg.zero_angle_deg))
+        # Сдвиг нуля: на угле zero_angle_deg будет 0; углы по часовой стрелке
+        angles = [s * float(p.angle) - zero_rad for p in points]
         ranges = [float(p.range) for p in points]
         intensities = [float(getattr(p, "intensity", 0.0)) for p in points]
 
         blind = self._geometry.lidar.blind_zone
-        filtered_ranges = []
-        
-        start_blind = blind.angle_start_deg
-        end_blind = blind.angle_end_deg
+        zero_deg = float(self._cfg.zero_angle_deg)
+        start_blind = float(blind.angle_start_deg) - zero_deg
+        end_blind = float(blind.angle_end_deg) - zero_deg
         if bool(self._cfg.invert_angle):
             start_blind, end_blind = -end_blind, -start_blind
+        filtered_ranges = []
         for angle_rad, dist in zip(angles, ranges):
             angle_deg = math.degrees(angle_rad)
             if _angle_in_sector(angle_deg, start_blind, end_blind):

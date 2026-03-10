@@ -71,8 +71,8 @@ robot_geometry:
       y: 0.0
       z: 0.12
     blind_zone:
-      angle_start_deg: 60.0
-      angle_end_deg: 120.0
+      angle_start_deg: 150.0
+      angle_end_deg: 210.0
       max_distance_m: 0.12
   head:
     position:
@@ -116,6 +116,7 @@ sensors:
     range_max_m: 8.0
     intensity_enabled: true
     invert_angle: true
+    zero_angle_deg: -90  # угол «вперёд» в сырых градусах лидара; после сдвига на нём будет 0°
     healthcheck_timeout_sec: 10.0
     healthcheck_test_timeout_sec: 15.0
     healthcheck_min_points: 32

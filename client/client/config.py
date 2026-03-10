@@ -115,6 +115,7 @@ class LidarConfig:
     range_max_m: float = 12.0
     intensity_enabled: bool = True
     invert_angle: bool = True
+    zero_angle_deg: float = -90.0  # угол, который считается нулём (на нём будет 0 после сдвига)
     healthcheck_timeout_sec: float = 3.0
     healthcheck_test_timeout_sec: float = 30.0  # max time test waits for healthcheck (incl. blocking init)
     healthcheck_min_points: int = 32
@@ -347,6 +348,7 @@ def load_client_config(path: str) -> ClientConfig:
                 range_max_m=float(lidar_raw.get("range_max_m", 12.0)),
                 intensity_enabled=bool(lidar_raw.get("intensity_enabled", True)),
                 invert_angle=bool(lidar_raw.get("invert_angle", True)),
+                zero_angle_deg=float(lidar_raw.get("zero_angle_deg", lidar_raw.get("zero_angle", -90.0))),
                 healthcheck_timeout_sec=float(lidar_raw.get("healthcheck_timeout_sec", 3.0)),
                 healthcheck_test_timeout_sec=float(lidar_raw.get("healthcheck_test_timeout_sec", 30.0)),
                 healthcheck_min_points=int(lidar_raw.get("healthcheck_min_points", 32)),
