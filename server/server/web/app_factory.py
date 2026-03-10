@@ -108,9 +108,9 @@ def create_app(
         try:
             mode = controller.set_mode(mode_raw)
             return jsonify({"success": True, "mode": mode.value})
-        except ValueError as e:
-            LOGGER.warning("Rejected mode switch: %s", e)
-            return jsonify({"success": False, "error": str(e)}), 400
+        except ValueError:
+            LOGGER.warning("Rejected unknown mode: %s", mode_raw)
+            return jsonify({"success": False, "error": f"Неизвестный режим: {mode_raw}"}), 400
 
     @app.post("/api/position")
     def set_position():

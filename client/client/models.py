@@ -16,7 +16,6 @@ class RobotStatus(str, Enum):
     DEGRADED = "degraded"
     WAITING_FOR_SERVER = "waiting_for_server"
     EMERGENCY_STOP = "emergency_stop"
-    ABORTED = "aborted"  # required sensor disabled, teleop blocked
 
 
 @dataclass

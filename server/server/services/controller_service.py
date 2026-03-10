@@ -64,14 +64,6 @@ class ControllerService:
 
     def set_mode(self, mode_raw: str) -> ControlMode:
         mode = ControlMode(mode_raw)
-        client_state = self._robot.get_client_state()
-        if client_state.get("status") == "aborted" and mode in (
-            ControlMode.TELEOPERATION,
-            ControlMode.TELEOP_SLAM,
-        ):
-            raise ValueError(
-                f"Teleoperation blocked: client aborted ({client_state.get('aborted_reason', 'unknown')})"
-            )
         with self._lock:
             if mode != self._active_mode:
                 prev_mode = self._active_mode
@@ -136,7 +128,6 @@ class ControllerService:
 
     def get_ui_status(self) -> dict:
         robot_config = self._robot.get_robot_config()
-        client_state = self._robot.get_client_state()
         with self._lock:
             return {
                 "x": float(self._ui.x),
@@ -158,8 +149,6 @@ class ControllerService:
                     "steering_deg": float(self._last_telemetry.steering_rad) * 57.29577951308232,
                     "imu_yaw_rate": float(self._last_telemetry.imu_yaw_rate),
                 },
-                "client_status": client_state.get("status", "unknown"),
-                "client_aborted_reason": client_state.get("aborted_reason"),
             }
 
     def tick_once(self) -> ControlCommand:
