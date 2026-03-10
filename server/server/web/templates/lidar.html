@@ -51,8 +51,8 @@ function drawGrid(centerX, centerY, radiusPx, rangeMaxM) {
         ctx.arc(centerX, centerY, r, 0, Math.PI * 2);
         ctx.stroke();
     }
-    // 0° сверху: угол данных -> угол отрисовки = angle + 90°
-    const dataToCanvas = (dataAngleRad) => dataAngleRad + Math.PI / 2;
+    // 0° сверху, числа по часовой: зеркалим угол относительно оси вперёд (angle -> -angle)
+    const dataToCanvas = (dataAngleRad) => -dataAngleRad + Math.PI / 2;
     for (let deg = -180; deg < 180; deg += 30) {
         const a = dataToCanvas((deg * Math.PI) / 180);
         ctx.beginPath();
@@ -73,7 +73,7 @@ function drawGrid(centerX, centerY, radiusPx, rangeMaxM) {
         const y = centerY;
         ctx.fillText(label, x, y);
     }
-    // Углы в градусах: 0° сверху
+    // Углы в градусах: 0° сверху, подписи тоже зеркалим (deg -> -deg)
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     const labelRadius = radiusPx * 1.06;
@@ -81,7 +81,7 @@ function drawGrid(centerX, centerY, radiusPx, rangeMaxM) {
         const a = dataToCanvas((deg * Math.PI) / 180);
         const x = centerX + Math.cos(a) * labelRadius;
         const y = centerY - Math.sin(a) * labelRadius;
-        ctx.fillText(deg + '°', x, y);
+        ctx.fillText((-deg) + '°', x, y);
     }
     ctx.restore();
 }
@@ -107,35 +107,8 @@ function drawScan(scan) {
     const aMin = Number(scan.angle_min || 0);
     const aInc = Number(scan.angle_increment || 0);
     const shadowWidth = (5 * Math.PI) / 180;
-    // 0° сверху: canvas_angle = data_angle + 90°
-    const dataToCanvas = (dataAngleRad) => dataAngleRad + Math.PI / 2;
-
-    // #region agent log
-    try {
-        fetch('http://localhost:7818/ingest/a3972696-7a4a-4321-8f58-191d44eb5c1e', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-Debug-Session-Id': 'e731ba',
-            },
-            body: JSON.stringify({
-                sessionId: 'e731ba',
-                runId: 'pre-fix',
-                hypothesisId: 'H1_H2',
-                location: 'server/web/templates/lidar.html:drawScan',
-                message: 'lidar_scan_angles_before_draw',
-                data: {
-                    angle_min_deg: aMin * 180 / Math.PI,
-                    angle_inc_deg: aInc * 180 / Math.PI,
-                    count: ranges.length,
-                },
-                timestamp: Date.now(),
-            }),
-        }).catch(() => {});
-    } catch (e) {
-        // ignore
-    }
-    // #endregion agent log
+    // 0° сверху, движение и подписи по часовой: canvas_angle = -data_angle + 90°
+    const dataToCanvas = (dataAngleRad) => -dataAngleRad + Math.PI / 2;
 
     for (let i = 0; i < ranges.length; i += 1) {
         const dist = Number(ranges[i]);
@@ -172,20 +145,21 @@ async function refreshLidar() {
         return;
     }
     const scan = data.scan;
-    const invert = !!data.invert_angle;
+    // Не инвертируем углы на фронте: клиент уже отдаёт углы по часовой (0 = вперёд после zero_angle).
+    // Иначе получались бы рост против ЧС и инверсия движения объекта.
     let aMin = Number(scan.angle_min || 0);
     let aMax = Number(scan.angle_max || 0);
     let aInc = Number(scan.angle_increment || 0);
-    if (invert) {
-        aMin = -aMin;
-        aMax = -aMax;
-        aInc = -aInc;
-    }
     pointsCount.textContent = Array.isArray(scan.ranges) ? scan.ranges.length : 0;
     rangeMinEl.textContent = Number(scan.range_min || 0).toFixed(2);
     rangeMaxEl.textContent = Number(scan.range_max || 0).toFixed(2);
-    angleMinEl.textContent = (aMin * 180 / Math.PI).toFixed(1);
-    angleMaxEl.textContent = (aMax * 180 / Math.PI).toFixed(1);
+    const minDataDeg = aMin * 180 / Math.PI;
+    const maxDataDeg = aMax * 180 / Math.PI;
+    // Отзеркаливаем и числовые подписи диапазона, чтобы они совпадали по направлению с круговой шкалой
+    const dispMin = Math.min(minDataDeg, maxDataDeg);
+    const dispMax = Math.max(minDataDeg, maxDataDeg);
+    angleMinEl.textContent = dispMin.toFixed(1);
+    angleMaxEl.textContent = dispMax.toFixed(1);
     if (scan.timestamp_ns) {
         lastScanTimestampNs = Number(scan.timestamp_ns);
     }

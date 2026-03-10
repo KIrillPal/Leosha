@@ -157,33 +157,6 @@ class TMiniProPlusLidarThread(threading.Thread):
         zero_rad = math.radians(float(self._cfg.zero_angle_deg))
         # Сдвиг нуля: на угле zero_angle_deg будет 0.
         angles = [s * float(p.angle) - zero_rad for p in points]
-
-        # #region agent log
-        try:
-            import json as _json, time as _time
-            _log = {
-                "sessionId": "e731ba",
-                "runId": "pre-fix",
-                "hypothesisId": "H1_H2_H3",
-                "location": "client/client/sensors/lidar.py:_to_laserscan",
-                "message": "lidar_angles_after_shift",
-                "data": {
-                    "invert_angle": bool(self._cfg.invert_angle),
-                    "zero_angle_deg": float(self._cfg.zero_angle_deg),
-                    "count": len(angles),
-                    "first_angle_deg": float(angles[0]) * 180.0 / math.pi if angles else None,
-                    "last_angle_deg": float(angles[-1]) * 180.0 / math.pi if angles else None,
-                    "angle_increment_est_deg": (sum(
-                        d for d in (angles[i + 1] - angles[i] for i in range(len(angles) - 1)))
-                        / max(1, len(angles) - 1)) * 180.0 / math.pi if len(angles) > 1 else None,
-                },
-                "timestamp": int(_time.time() * 1000),
-            }
-            with open("/home/kir/Leosha/.cursor/debug-e731ba.log", "a", encoding="utf-8") as _f:
-                _f.write(_json.dumps(_log, ensure_ascii=False) + "\n")
-        except Exception:
-            pass
-        # #endregion agent log
         ranges = [float(p.range) for p in points]
         intensities = [float(getattr(p, "intensity", 0.0)) for p in points]
 
