@@ -84,7 +84,7 @@ class ZmqBridge:
         self._command_sub.setsockopt(zmq.RCVHWM, int(recv_high_water_mark))
         self._command_sub.setsockopt(zmq.CONFLATE, 1)
         self._command_sub.setsockopt(zmq.RCVTIMEO, int(recv_timeout_ms))
-        self._command_sub.bind(f"tcp://0.0.0.0:{int(command_port)}")
+        self._command_sub.connect(f"tcp://{server_host}:{int(command_port)}")
 
         self._report_pub = self._ctx.socket(zmq.PUB)
         self._report_pub.setsockopt(zmq.SNDHWM, int(send_high_water_mark))

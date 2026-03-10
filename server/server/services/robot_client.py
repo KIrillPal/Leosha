@@ -69,10 +69,10 @@ def _server_mode_to_client_str(mode: ControlMode) -> str:
 class ZmqRobotClient:
     """Receives telemetry from the robot via ZMQ and sends commands back.
 
-    Socket topology (current):
-      server SUB  binds     telemetry_port   ← client PUB connects
-      server PUB  connects  command_port     → client SUB binds
-      server SUB  binds     report_port      ← client PUB connects
+    Socket topology (server binds, client connects to server for all channels):
+      server SUB  binds  telemetry_port  ← client PUB connects
+      server PUB  binds  command_port    ← client SUB connects (so robot receives commands)
+      server SUB  binds  report_port    ← client PUB connects
     """
 
     _BLACK_FRAME = _make_black_frame_jpeg()
@@ -101,7 +101,7 @@ class ZmqRobotClient:
         self._command_pub = self._ctx.socket(zmq.PUB)
         self._command_pub.setsockopt(zmq.SNDHWM, max(100, int(send_high_water_mark)))
         self._command_pub.setsockopt(zmq.LINGER, 0)
-        self._command_pub.connect(f"tcp://{ip}:{command_port}")
+        self._command_pub.bind(f"tcp://{bind_address}:{command_port}")
 
         self._report_sub = self._ctx.socket(zmq.SUB)
         self._report_sub.setsockopt_string(zmq.SUBSCRIBE, "")
@@ -132,8 +132,8 @@ class ZmqRobotClient:
         self._recv_thread.start()
 
         LOGGER.info(
-            "ZmqRobotClient started | robot=%s bind=%s telem_port=%d cmd->%s:%d report_port=%d",
-            ip, bind_address, telemetry_port, ip, command_port, report_port,
+            "ZmqRobotClient started | robot=%s bind=%s telem=%d cmd=%d report=%d",
+            ip, bind_address, telemetry_port, command_port, report_port,
         )
 
     # -- RobotClient protocol -----------------------------------------------
