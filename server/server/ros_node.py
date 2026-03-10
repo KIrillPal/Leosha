@@ -124,13 +124,21 @@ class Ros2ServerBridge:
             msg = LaserScan()
             msg.header.stamp = stamp
             msg.header.frame_id = "laser_frame"
-            msg.angle_min = float(scan.get("angle_min", 0.0))
-            msg.angle_max = float(scan.get("angle_max", 0.0))
-            msg.angle_increment = float(scan.get("angle_increment", 0.0))
+            ranges = scan.get("ranges", [])
+            angle_min = float(scan.get("angle_min", 0.0))
+            angle_max = float(scan.get("angle_max", 0.0))
+            n = len(ranges)
+            # slam_toolbox/Karto expects len(ranges) == round((angle_max - angle_min) / angle_increment) + 1.
+            # Ensure consistency to avoid "LaserRangeScan contains X range readings, expected Y".
+            if n > 1:
+                msg.angle_increment = (angle_max - angle_min) / (n - 1)
+            else:
+                msg.angle_increment = float(scan["angle_increment"])
+            msg.angle_min = angle_min
+            msg.angle_max = angle_max
             msg.range_min = float(scan.get("range_min", 0.0))
             msg.range_max = float(scan.get("range_max", 5.0))
-            ranges = scan.get("ranges", [])
-            msg.ranges = [float(r) if r is not None else float("nan") for r in ranges]
+            msg.ranges = [float(r) for r in ranges]
             intensities = scan.get("intensities", [])
             if intensities:
                 msg.intensities = [float(i) if i is not None else 0.0 for i in intensities]

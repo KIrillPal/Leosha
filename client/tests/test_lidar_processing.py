@@ -63,9 +63,9 @@ def test_lidar_blind_zone_filters_near_points_without_inversion(client_config):
     assert scan.angle_min < scan.angle_max
     assert scan.angle_increment > 0.0
     assert scan.ranges[0] == 1.0
-    # Слепая зона заполняется max_distance_m
-    assert scan.ranges[1] == 0.5
-    assert scan.ranges[2] == 0.5
+    # Слепая зона помечается NaN (нет измерения)
+    assert math.isnan(scan.ranges[1])
+    assert math.isnan(scan.ranges[2])
     assert scan.ranges[3] == 1.1
 
 
@@ -89,10 +89,59 @@ def test_lidar_blind_zone_uses_inverted_output_angles(client_config):
 
     assert scan.angle_min < scan.angle_max
     assert scan.angle_increment > 0.0
-    # При invert_angle сортировка ставит -90° первым → он в слепой зоне 60..120 (в выходных -120..-60), заполняется max_distance_m
-    assert scan.ranges[0] == 0.5
+    # При invert_angle сортировка ставит -90° первым → он в слепой зоне 60..120 (в выходных -120..-60), помечается NaN
+    assert math.isnan(scan.ranges[0])
     assert scan.ranges[1] == 1.0
     assert scan.ranges[2] == 0.2
+
+
+def test_lidar_binning_when_expected_rays_mismatch(client_config):
+    """При expected_num_rays != 0 и другом числе лучей применяется бининг; слепая зона остаётся NaN."""
+    cfg = copy.deepcopy(client_config)
+    cfg.sensors.lidar.invert_angle = False
+    cfg.sensors.lidar.zero_angle_deg = 0.0
+    cfg.sensors.lidar.expected_num_rays = 360
+    cfg.robot_geometry.lidar.blind_zone.angle_start_deg = -10.0
+    cfg.robot_geometry.lidar.blind_zone.angle_end_deg = 10.0
+    cfg.robot_geometry.lidar.blind_zone.max_distance_m = 0.5
+    thread = TMiniProPlusLidarThread(cfg.sensors.lidar, cfg.robot_geometry, None, None, None, None)
+    # Скан из 4 точек (не 360) — должен пройти бининг до 360
+    points = [
+        _Point(math.radians(-20), 1.0),
+        _Point(math.radians(0), 0.2),   # слепая зона → NaN
+        _Point(math.radians(5), 0.3),   # слепая зона → NaN
+        _Point(math.radians(20), 2.0),
+    ]
+    scan = thread._to_laserscan(_Scan(points))
+    assert len(scan.ranges) == 360
+    assert scan.angle_increment == (scan.angle_max - scan.angle_min) / 359
+    # В слепой зоне должны быть NaN
+    assert any(math.isnan(v) for v in scan.ranges)
+    # Часть лучей валидные
+    assert any(not math.isnan(v) and v > 0 for v in scan.ranges)
+
+
+def test_lidar_warns_when_ray_count_deviation_over_10_percent(client_config):
+    """При отклонении числа лучей от expected_num_rays более чем на 10% пишется warning (один раз)."""
+    from unittest.mock import patch
+    cfg = copy.deepcopy(client_config)
+    cfg.sensors.lidar.expected_num_rays = 100
+    cfg.sensors.lidar.zero_angle_deg = 0.0
+    cfg.robot_geometry.lidar.blind_zone.angle_start_deg = -180.0
+    cfg.robot_geometry.lidar.blind_zone.angle_end_deg = 180.0
+    thread = TMiniProPlusLidarThread(cfg.sensors.lidar, cfg.robot_geometry, None, None, None, None)
+    points = [_Point(math.radians(-90 + i * 60), 1.0) for i in range(4)]
+    with patch("client.sensors.lidar.LOGGER") as mock_log:
+        thread._to_laserscan(_Scan(points))
+        mock_log.warning.assert_called_once()
+        fmt = mock_log.warning.call_args[0][0]
+        args = mock_log.warning.call_args[0][1:]
+        assert "deviates from config" in fmt
+        assert args[1] == 4  # n_actual
+        assert args[2] == 100  # n_expected
+        mock_log.warning.reset_mock()
+        thread._to_laserscan(_Scan(points))
+        mock_log.warning.assert_not_called()
 
 
 def test_lidar_blind_zone_respects_distance_threshold_and_wraparound(client_config):
@@ -115,5 +164,5 @@ def test_lidar_blind_zone_respects_distance_threshold_and_wraparound(client_conf
 
     assert scan.ranges[0] == 0.8
     assert scan.ranges[1] == 0.2
-    # Слепая зона заполняется max_distance_m
-    assert scan.ranges[2] == 0.5
+    # Слепая зона помечается NaN
+    assert math.isnan(scan.ranges[2])

@@ -119,6 +119,7 @@ sensors:
     intensity_enabled: true
     invert_angle: false
     zero_angle_deg: -90  # угол «вперёд» в сырых градусах лидара; после сдвига на нём будет 0°
+    expected_num_rays: 396  # если > 0 и число лучей не совпадает — применяется бининг
     healthcheck_timeout_sec: 10.0
     healthcheck_test_timeout_sec: 15.0
     healthcheck_min_points: 32

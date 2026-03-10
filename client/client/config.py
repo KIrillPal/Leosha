@@ -116,6 +116,8 @@ class LidarConfig:
     intensity_enabled: bool = True
     invert_angle: bool = True
     zero_angle_deg: float = -90.0  # угол, который считается нулём (на нём будет 0 после сдвига)
+    # Ожидаемое число лучей в скане (для slam_toolbox). Если > 0 и фактическое число не совпадает — применяется бининг.
+    expected_num_rays: int = 0
     healthcheck_timeout_sec: float = 3.0
     healthcheck_test_timeout_sec: float = 30.0  # max time test waits for healthcheck (incl. blocking init)
     healthcheck_min_points: int = 32
@@ -352,6 +354,7 @@ def load_client_config(path: str) -> ClientConfig:
                 intensity_enabled=bool(lidar_raw.get("intensity_enabled", True)),
                 invert_angle=bool(lidar_raw.get("invert_angle", True)),
                 zero_angle_deg=float(lidar_raw.get("zero_angle_deg", lidar_raw.get("zero_angle", -90.0))),
+                expected_num_rays=int(lidar_raw.get("expected_num_rays", 0)),
                 healthcheck_timeout_sec=float(lidar_raw.get("healthcheck_timeout_sec", 3.0)),
                 healthcheck_test_timeout_sec=float(lidar_raw.get("healthcheck_test_timeout_sec", 30.0)),
                 healthcheck_min_points=int(lidar_raw.get("healthcheck_min_points", 32)),

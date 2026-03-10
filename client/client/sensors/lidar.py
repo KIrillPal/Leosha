@@ -21,6 +21,36 @@ def _angle_in_sector(angle_deg: float, start_deg: float, end_deg: float) -> bool
     return a >= s or a <= e
 
 
+def _bin_scan(scan: LaserScan, angles: list[float], num_bins: int) -> LaserScan:
+    """Приводит скан к фиксированному числу лучей бинингом по углу. Пустые бины и слепая зона (NaN) остаются NaN."""
+    if num_bins < 1 or len(scan.ranges) != len(angles):
+        return scan
+    angle_min = scan.angle_min
+    angle_max = scan.angle_max
+    span = angle_max - angle_min
+    if span <= 0:
+        return scan
+    angle_increment_out = span / (num_bins - 1) if num_bins > 1 else 0.0
+    out_ranges = [float("nan")] * num_bins
+    out_intensities = [float("nan")] * num_bins
+    intensities = scan.intensities if len(scan.intensities) == len(scan.ranges) else [0.0] * len(scan.ranges)
+    for angle, r, intensity in zip(angles, scan.ranges, intensities):
+        t = (angle - angle_min) / span
+        bin_idx = min(max(0, round(t * (num_bins - 1))), num_bins - 1)
+        out_ranges[bin_idx] = float(r)
+        out_intensities[bin_idx] = float(intensity)
+    return LaserScan(
+        timestamp_ns=scan.timestamp_ns,
+        angle_min=angle_min,
+        angle_max=angle_max,
+        angle_increment=angle_increment_out,
+        range_min=scan.range_min,
+        range_max=scan.range_max,
+        ranges=out_ranges,
+        intensities=out_intensities,
+    )
+
+
 class TMiniProPlusLidarThread(threading.Thread):
     """Поток реального лидара YDLidar T-mini Pro Plus через SDK ydlidar."""
 
@@ -35,6 +65,7 @@ class TMiniProPlusLidarThread(threading.Thread):
         self._laser = None
         self._sdk = None
         self._failures = 0
+        self._warned_ray_deviation = False
 
     def healthcheck(self, timeout_sec: float | None = None) -> HealthcheckResult:
         sensor_name = "lidar"
@@ -160,6 +191,7 @@ class TMiniProPlusLidarThread(threading.Thread):
         ranges = [float(p.range) for p in points]
         intensities = [float(getattr(p, "intensity", 0.0)) for p in points]
 
+        # Слепая зона: впервые обрабатывается здесь — точки в секторе помечаются как NaN (нет измерения).
         blind = self._geometry.lidar.blind_zone
         start_blind = float(blind.angle_start_deg)
         end_blind = float(blind.angle_end_deg)
@@ -169,14 +201,14 @@ class TMiniProPlusLidarThread(threading.Thread):
         for angle_rad, dist in zip(angles, ranges):
             angle_deg = math.degrees(angle_rad)
             if _angle_in_sector(angle_deg, start_blind, end_blind) and dist < blind.max_distance_m:
-                filtered_ranges.append(float(blind.max_distance_m))
+                filtered_ranges.append(float("nan"))
             else:
                 filtered_ranges.append(dist)
 
         diffs = [angles[i + 1] - angles[i] for i in range(len(angles) - 1)]
         diffs = [d for d in diffs if d > 0]
         angle_increment = sum(diffs) / len(diffs) if diffs else 0.01
-        return LaserScan(
+        scan = LaserScan(
             timestamp_ns=monotonic_ns(),
             angle_min=angles[0],
             angle_max=angles[-1],
@@ -186,6 +218,21 @@ class TMiniProPlusLidarThread(threading.Thread):
             ranges=filtered_ranges,
             intensities=intensities,
         )
+        n_expected = int(self._cfg.expected_num_rays) if hasattr(self._cfg, "expected_num_rays") else 0
+        n_actual = len(scan.ranges)
+        if n_expected > 0:
+            deviation = abs(n_actual - n_expected) / n_expected
+            if deviation > 0.1 and not self._warned_ray_deviation:
+                self._warned_ray_deviation = True
+                LOGGER.warning(
+                    "Lidar ray count deviates from config by %.0f%%: actual=%d, expected_num_rays=%d (binning applied)",
+                    deviation * 100.0,
+                    n_actual,
+                    n_expected,
+                )
+            if n_actual != n_expected:
+                scan = _bin_scan(scan, angles, n_expected)
+        return scan
 
     def _create_and_init_lidar(self, ydlidar):
         """Create CYdLidar, set options (same order as plot_tminiplus_test.py), initialize. Returns (laser, port)."""

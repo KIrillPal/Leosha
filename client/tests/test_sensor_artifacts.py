@@ -267,8 +267,8 @@ def test_lidar_thread_writes_map_artifact(monkeypatch, client_config):
     assert snap.scan is not None
     status = statuses.snapshot()["lidar"]
     assert status.healthy is True
-    # Проверяем, что часть лучей в слепой зоне заполнена max_distance_m
-    assert any(v == 0.5 for v in snap.scan.ranges)
+    # Проверяем, что часть лучей в слепой зоне помечена NaN
+    assert any(math.isnan(v) for v in snap.scan.ranges)
 
     artifact_path = ARTIFACTS_DIR / "lidar_map.png"
     _render_lidar_map_png(artifact_path, snap.scan.ranges, snap.scan.angle_min, snap.scan.angle_increment)
