@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 
 import yaml
 
@@ -220,6 +220,11 @@ class ClientConfig:
     sensors: SensorsConfig
     network: NetworkConfig
     actuators: ActuatorsConfig
+
+
+def client_config_to_dict(cfg: ClientConfig) -> dict:
+    """Сериализация всего конфига клиента в dict для передачи на сервер (телеметрия)."""
+    return asdict(cfg)
 
 
 def _vec3(raw: dict | None, default: Vec3 | None = None) -> Vec3:

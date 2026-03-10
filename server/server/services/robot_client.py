@@ -35,6 +35,7 @@ class RobotClient(Protocol):
     def get_latest_frame(self) -> bytes: ...
     def get_latest_lidar_scan(self) -> dict | None: ...
     def get_network_stats(self) -> NetworkStats: ...
+    def get_robot_config(self) -> dict | None: ...
 
 
 @dataclass
@@ -115,6 +116,7 @@ class ZmqRobotClient:
         self._telemetry = TelemetryFrame(frame_jpeg=self._BLACK_FRAME)
         self._latest_frame: bytes = self._BLACK_FRAME
         self._latest_lidar_scan: dict | None = None
+        self._robot_config: dict | None = None
         self._counters = _Counters()
         self._network = NetworkStats()
         self._cmd_seq = 0
@@ -182,6 +184,12 @@ class ZmqRobotClient:
             if self._latest_lidar_scan is None:
                 return None
             return dict(self._latest_lidar_scan)
+
+    def get_robot_config(self) -> dict | None:
+        with self._lock:
+            if self._robot_config is None:
+                return None
+            return dict(self._robot_config)
 
     def get_network_stats(self) -> NetworkStats:
         with self._lock:
@@ -297,6 +305,8 @@ class ZmqRobotClient:
             self._last_ping_ms = elapsed_ms
             self._network.latency_ms = elapsed_ms
             self._network.rssi_dbm = float(header.get("wifi_rssi_dbm", -50.0))
+            if "robot_config" in header and isinstance(header["robot_config"], dict):
+                self._robot_config = header["robot_config"]
 
         rx = self._rx_total
         if rx <= 3 or rx % 300 == 0:
@@ -377,6 +387,9 @@ class MockRobotClient:
             return self._telemetry.frame_jpeg
 
     def get_latest_lidar_scan(self) -> dict | None:
+        return None
+
+    def get_robot_config(self) -> dict | None:
         return None
 
     def get_network_stats(self) -> NetworkStats:

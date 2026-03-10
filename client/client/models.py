@@ -108,6 +108,8 @@ class TelemetryPacket:
     sensor_timing: dict[str, SensorTimingStats]
     telemetry_pack_us: float = 0.0
     telemetry_send_us: float = 0.0
+    # Конфиг робота (углы головы и т.д.) — передаётся при первой связи для отображения на сервере
+    robot_config: dict | None = None
 
 
 @dataclass

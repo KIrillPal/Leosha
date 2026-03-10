@@ -4,6 +4,7 @@ import logging
 import threading
 from time import monotonic_ns, sleep
 
+from .config import client_config_to_dict
 from .estimator import SimpleStateEstimator
 from .executors import AutonomyExecutor, PauseExecutor, TeleoperationExecutor
 from .local_state import LocalState
@@ -203,6 +204,7 @@ class ClientRuntime:
                     velocity=Twist2D(),
                     steering_angle=0.0,
                 )
+            robot_config = client_config_to_dict(self.config)
             packet = TelemetryPacket(
                 seq=self._next_seq(),
                 timestamp_ns=snapshot.captured_at_ns,
@@ -219,6 +221,7 @@ class ClientRuntime:
                 sensor_status=self.sensor_statuses.snapshot(),
                 sensor_timing=self.stats.drain_all(),
                 telemetry_pack_us=(monotonic_ns() - t0) / 1000.0,
+                robot_config=robot_config,
             )
             send_start = monotonic_ns()
             self.bridge.send_telemetry(packet)

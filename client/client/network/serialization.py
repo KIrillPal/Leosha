@@ -208,6 +208,8 @@ def pack_telemetry_packet(packet: TelemetryPacket) -> tuple[bytes, bytes]:
         "telemetry_send_us": packet.telemetry_send_us,
         "frame_size": len(packet.frame_jpeg),
     }
+    if packet.robot_config is not None:
+        header["robot_config"] = packet.robot_config
     return msgpack.packb(header, use_bin_type=True), packet.frame_jpeg
 
 

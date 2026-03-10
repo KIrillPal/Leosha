@@ -13,6 +13,14 @@ from .robot_client import RobotClient
 LOGGER = logging.getLogger(__name__)
 
 
+def _head_axis_to_deg(value: float, min_deg: float, max_deg: float) -> float:
+    """Как на клиенте: значение -1..1 в углы (min_deg..max_deg). Не throttle 0/1."""
+    value = max(-1.0, min(1.0, float(value)))
+    if value >= 0.0:
+        return value * float(max_deg)
+    return value * abs(float(min_deg))
+
+
 @dataclass
 class TeleopUiState:
     x: float = 0.0
@@ -83,7 +91,37 @@ class ControllerService:
             if hasattr(self._manual, key_l):
                 setattr(self._manual, key_l, bool(state))
 
+    def _command_status(self, robot_config: dict | None) -> dict:
+        c = self._last_command
+        head = None
+        if robot_config:
+            # Полный конфиг: robot_geometry.head; ранее передавали только head
+            head = (robot_config.get("robot_geometry") or {}).get("head") or robot_config.get("head")
+        if head is not None and isinstance(head, dict):
+            pan_deg = _head_axis_to_deg(
+                c.head_pan,
+                float(head.get("neck_min_deg", -70.0)),
+                float(head.get("neck_max_deg", 70.0)),
+            )
+            tilt_deg = _head_axis_to_deg(
+                c.head_tilt,
+                float(head.get("face_min_deg", -45.0)),
+                float(head.get("face_max_deg", 45.0)),
+            )
+        else:
+            pan_deg = float(c.head_pan) * 60.0
+            tilt_deg = float(c.head_tilt) * 45.0
+        return {
+            "speed": float(c.speed),
+            "steering": float(c.steering),
+            "head_pan": float(c.head_pan),
+            "head_tilt": float(c.head_tilt),
+            "head_pan_deg": pan_deg,
+            "head_tilt_deg": tilt_deg,
+        }
+
     def get_ui_status(self) -> dict:
+        robot_config = self._robot.get_robot_config()
         with self._lock:
             return {
                 "x": float(self._ui.x),
@@ -98,14 +136,7 @@ class ControllerService:
                     "ctrl": self._manual.ctrl,
                 },
                 "mode": self._active_mode.value,
-                "command": {
-                    "speed": float(self._last_command.speed),
-                    "steering": float(self._last_command.steering),
-                    "head_pan": float(self._last_command.head_pan),
-                    "head_tilt": float(self._last_command.head_tilt),
-                    "head_pan_deg": float(self._last_command.head_pan) * 60.0,
-                    "head_tilt_deg": float(self._last_command.head_tilt) * 45.0,
-                },
+                "command": self._command_status(robot_config),
                 "telemetry": {
                     "speed_mps": float(self._last_telemetry.speed_mps),
                     "steering_rad": float(self._last_telemetry.steering_rad),
