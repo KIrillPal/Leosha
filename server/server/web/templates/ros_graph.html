@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}ROS Graph{% endblock %}
+{% block content %}
+<style>
+    .ros-wrap { display: grid; gap: 12px; grid-template-columns: 1fr 320px; }
+    .ros-graph { background: #0f172a; border: 1px solid #1e293b; border-radius: 12px; padding: 20px; min-height: 400px; }
+    .ros-side { background: white; border: 1px solid #e5e7eb; border-radius: 12px; padding: 12px; }
+    .node { display: inline-block; margin: 8px; padding: 12px 16px; border-radius: 10px; cursor: pointer;
+        background: #1e293b; color: #e2e8f0; border: 2px solid #334155; transition: all 0.2s; }
+    .node:hover { border-color: #3b82f6; background: #334155; }
+    .node.running { border-color: #22c55e; }
+    .node.stopped { border-color: #64748b; opacity: 0.7; }
+    .node-name { font-weight: 700; font-size: 15px; }
+    .node-fps { font-size: 12px; color: #94a3b8; }
+    .tooltip { position: fixed; background: #1e293b; color: #e2e8f0; padding: 12px 16px; border-radius: 8px;
+        max-width: 280px; box-shadow: 0 4px 12px rgba(0,0,0,0.4); z-index: 1000; pointer-events: none;
+        font-size: 13px; line-height: 1.4; }
+    .tooltip-title { font-weight: 700; margin-bottom: 6px; }
+    .tooltip-desc { color: #94a3b8; }
+</style>
+<div class="ros-wrap">
+    <div class="ros-graph" id="graphArea"></div>
+    <div class="ros-side">
+        <h3>ROS Nodes</h3>
+        <p class="hint">Наведите на ноду для описания и FPS.</p>
+        <div id="nodeList"></div>
+    </div>
+</div>
+<div id="tooltip" class="tooltip" style="display:none;"></div>
+<script>
+const graphArea = document.getElementById('graphArea');
+const nodeList = document.getElementById('nodeList');
+const tooltip = document.getElementById('tooltip');
+
+function showTooltip(e, node) {
+    tooltip.innerHTML = '<div class="tooltip-title">' + node.name + '</div>' +
+        '<div>Status: ' + node.status + '</div>' +
+        '<div>FPS: ' + node.fps + '</div>' +
+        '<div class="tooltip-desc">' + (node.description || '—') + '</div>';
+    tooltip.style.display = 'block';
+    tooltip.style.left = (e.clientX + 12) + 'px';
+    tooltip.style.top = (e.clientY + 12) + 'px';
+}
+
+function hideTooltip() {
+    tooltip.style.display = 'none';
+}
+
+function renderNodes(nodes) {
+    graphArea.innerHTML = '';
+    nodeList.innerHTML = '';
+    nodes.forEach(n => {
+        const el = document.createElement('div');
+        el.className = 'node ' + (n.status || 'unknown');
+        el.innerHTML = '<div class="node-name">' + n.name + '</div><div class="node-fps">FPS: ' + n.fps + '</div>';
+        el.addEventListener('mouseenter', (e) => showTooltip(e, n));
+        el.addEventListener('mousemove', (e) => { tooltip.style.left = (e.clientX + 12) + 'px'; tooltip.style.top = (e.clientY + 12) + 'px'; });
+        el.addEventListener('mouseleave', hideTooltip);
+        graphArea.appendChild(el);
+
+        const li = document.createElement('div');
+        li.className = 'metric-row';
+        li.innerHTML = '<span class="metric-name">' + n.name + '</span> <span class="metric-value">' + n.status + ' / ' + n.fps + ' fps</span>';
+        nodeList.appendChild(li);
+    });
+}
+
+async function refreshGraph() {
+    const resp = await fetch('/api/ros/graph');
+    const data = await resp.json();
+    if (data.success && Array.isArray(data.nodes)) {
+        renderNodes(data.nodes);
+    }
+}
+
+refreshGraph();
+setInterval(refreshGraph, 2000);
+</script>
+{% endblock %}

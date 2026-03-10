@@ -1,0 +1,22 @@
+Metadata-Version: 2.4
+Name: server
+Version: 0.1.0
+Summary: ROS2 сервер управления роботом с YAML-конфигом, web GUI и mock-клиентом.
+Maintainer: Leosha Dev
+Maintainer-email: dev@example.com
+License: MIT
+Requires-Dist: setuptools
+Requires-Dist: Flask>=2.2
+Requires-Dist: numpy>=1.24
+Requires-Dist: Pillow>=9.0
+Requires-Dist: PyYAML>=6.0
+Requires-Dist: pyzmq>=25.0
+Requires-Dist: msgpack>=1.0
+Provides-Extra: test
+Requires-Dist: pytest>=7.0; extra == "test"
+Dynamic: license
+Dynamic: maintainer
+Dynamic: maintainer-email
+Dynamic: provides-extra
+Dynamic: requires-dist
+Dynamic: summary

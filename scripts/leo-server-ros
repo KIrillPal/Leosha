@@ -1,0 +1,14 @@
+#!/usr/bin/zsh
+# Запуск LEO server с окружением leo-ros (Python 3.10 + ROS2 rclpy)
+# Требует: conda env leo-ros, ROS2 Humble
+
+set -e
+source /opt/ros/humble/setup.zsh 2>/dev/null || source /opt/ros/humble/setup.bash
+eval "$(conda shell.zsh hook 2>/dev/null || conda shell.bash hook)"
+conda activate leo-ros
+
+cd "${0:A:h}/.."
+colcon build --packages-select server
+source install/setup.zsh 2>/dev/null || source install/setup.bash
+# Для SLAM (карта, pose) используйте teleop_slam.launch.py
+ros2 launch server teleop_slam.launch.py "$@"

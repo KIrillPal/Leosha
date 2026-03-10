@@ -1,0 +1,16 @@
+# Шаблон конфигурации сервера. Скопируйте в code/configs/server.yaml или укажите --config.
+# См. code/configs/README.md — таблица всех аргументов.
+
+app:
+  host: "127.0.0.1"       # Хост веб‑интерфейса и API
+  port: 8080               # Порт веб‑сервера
+  command_hz: 100.0        # Частота отправки команд роботу (Гц)
+
+robot:
+  ip: "127.0.0.1"          # IP робота (для отображения и Ping)
+
+control:
+  head_sensitivity: 0.002  # Чувствительность управления головой (мышь). Руление берётся из конфига клиента actuators.wheel (min/max/zero).
+
+network:
+  grafana_url: ""          # URL дашборда Grafana (вкладка «Сеть»)

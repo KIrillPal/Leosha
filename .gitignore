@@ -2,3 +2,12 @@
 **.jpg
 **.png
 **/__pycache__
+**/.lgd-nfy0
+**/.hydra
+**/*.log
+
+# colcon
+build
+install
+log
+notes

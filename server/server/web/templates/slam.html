@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% block title %}SLAM{% endblock %}
+{% block content %}
+<style>
+    .slam-wrap { display: grid; gap: 12px; grid-template-columns: 1fr 280px; }
+    .slam-card { background: #0a0f1e; border: 1px solid #1e293b; border-radius: 12px; padding: 12px; }
+    .slam-side { background: white; border: 1px solid #e5e7eb; border-radius: 12px; padding: 12px; }
+    #mapCanvas { width: 100%; height: 70vh; display: block; border-radius: 10px; background: #1e293b; }
+    .metric-row { margin: 8px 0; }
+    .metric-name { color: #6b7280; font-size: 13px; }
+    .metric-value { font-size: 20px; font-weight: 700; }
+    .status-badge { display: inline-block; padding: 4px 10px; border-radius: 6px; font-size: 13px; font-weight: 600; }
+    .status-initializing { background: #fef3c7; color: #92400e; }
+    .status-mapping { background: #d1fae5; color: #065f46; }
+    .status-localized { background: #dbeafe; color: #1e40af; }
+    .status-degraded { background: #fed7aa; color: #9a3412; }
+    .status-failed { background: #fecaca; color: #991b1b; }
+    .status-unknown { background: #e5e7eb; color: #4b5563; }
+</style>
+<div class="slam-wrap">
+    <div class="slam-card">
+        <canvas id="mapCanvas"></canvas>
+    </div>
+    <div class="slam-side">
+        <h3>SLAM Stats</h3>
+        <div class="metric-row"><div class="metric-name">FPS</div><div class="metric-value" id="slamFps">0</div></div>
+        <div class="metric-row"><div class="metric-name">Latency</div><div class="metric-value"><span id="slamLatency">-</span> ms</div></div>
+        <div class="metric-row"><div class="metric-name">Scans</div><div class="metric-value" id="slamScans">0</div></div>
+        <div class="metric-row"><div class="metric-name">Map updates</div><div class="metric-value" id="slamMapUpdates">0</div></div>
+        <div class="metric-row"><div class="metric-name">Pose updates</div><div class="metric-value" id="slamPoseUpdates">0</div></div>
+        <div class="metric-row"><div class="metric-name">Status</div><div><span id="slamStatus" class="status-badge">—</span></div></div>
+        <div class="metric-row"><div class="metric-name">Pose (x, y, θ)</div><div class="metric-value" style="font-size:14px;"><span id="slamPose">—</span></div></div>
+        <p class="hint">Карта и pose обновляются при наличии slam_toolbox.</p>
+    </div>
+</div>
+<script>
+const mapCanvas = document.getElementById('mapCanvas');
+const ctx = mapCanvas.getContext('2d');
+let mapImg = null;
+
+function resizeCanvas() {
+    const rect = mapCanvas.getBoundingClientRect();
+    mapCanvas.width = Math.max(320, Math.floor(rect.width));
+    mapCanvas.height = Math.max(320, Math.floor(rect.height));
+    if (mapImg) drawMap();
+}
+
+function drawMap() {
+    const w = mapCanvas.width;
+    const h = mapCanvas.height;
+    ctx.fillStyle = '#1e293b';
+    ctx.fillRect(0, 0, w, h);
+    if (!mapImg) return;
+    const scale = Math.min(w / mapImg.width, h / mapImg.height);
+    const sw = mapImg.width * scale;
+    const sh = mapImg.height * scale;
+    const sx = (w - sw) / 2;
+    const sy = (h - sh) / 2;
+    ctx.drawImage(mapImg, sx, sy, sw, sh);
+}
+
+async function refreshSlam() {
+    const [statusResp, mapResp, poseResp] = await Promise.all([
+        fetch('/api/slam/status'),
+        fetch('/api/slam/map'),
+        fetch('/api/slam/pose'),
+    ]);
+    const status = await statusResp.json();
+    if (status.success) {
+        document.getElementById('slamFps').textContent = status.fps;
+        document.getElementById('slamLatency').textContent = status.latency_ms;
+        document.getElementById('slamScans').textContent = status.scan_count;
+        document.getElementById('slamMapUpdates').textContent = status.map_updates;
+        document.getElementById('slamPoseUpdates').textContent = status.pose_updates;
+        const el = document.getElementById('slamStatus');
+        el.textContent = status.status;
+        const statusClass = (status.status || 'unknown').replace(/[^a-z0-9_]/g, '_') || 'unknown';
+        el.className = 'status-badge status-' + statusClass;
+    }
+    const pose = await poseResp.json();
+    if (pose.success) {
+        document.getElementById('slamPose').textContent =
+            `${pose.x.toFixed(2)}, ${pose.y.toFixed(2)}, ${(pose.theta * 180 / Math.PI).toFixed(1)}°`;
+    }
+    if (mapResp.ok && mapResp.headers.get('content-type')?.includes('image')) {
+        const blob = await mapResp.blob();
+        const url = URL.createObjectURL(blob);
+        mapImg = new Image();
+        mapImg.onload = () => { drawMap(); URL.revokeObjectURL(url); };
+        mapImg.src = url;
+    } else if (!mapImg) {
+        drawMap();
+    }
+}
+
+window.addEventListener('resize', resizeCanvas);
+resizeCanvas();
+refreshSlam();
+setInterval(refreshSlam, 500);
+</script>
+{% endblock %}
