@@ -7,6 +7,7 @@ from enum import Enum
 class OperatingMode(str, Enum):
     PAUSE = "pause"
     TELEOPERATION = "teleoperation"
+    TELEOP_SLAM = "teleop_slam"
     AUTONOMY_PROFILE_1 = "autonomy_profile_1"
 
 

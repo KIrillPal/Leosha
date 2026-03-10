@@ -28,6 +28,8 @@
     <a class="tab {% if active_tab == 'teleop' %}active{% endif %}" href="/teleop">Телеуправление</a>
     <a class="tab {% if active_tab == 'network' %}active{% endif %}" href="/network">Сеть</a>
     <a class="tab {% if active_tab == 'lidar' %}active{% endif %}" href="/lidar">LiDAR</a>
+    <a class="tab {% if active_tab == 'slam' %}active{% endif %}" href="/slam">SLAM</a>
+    <a class="tab {% if active_tab == 'ros_graph' %}active{% endif %}" href="/ros-graph">ROS Graph</a>
 </div>
 <div class="content">{% block content %}{% endblock %}</div>
 </body>

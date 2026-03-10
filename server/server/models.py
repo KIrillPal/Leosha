@@ -8,6 +8,7 @@ from time import monotonic
 class ControlMode(str, Enum):
     PAUSE = "pause"
     TELEOPERATION = "teleoperation"
+    TELEOP_SLAM = "teleop_slam"
     AUTONOMY_PROFILE_1 = "autonomy_profile_1"
 
 
@@ -34,6 +35,20 @@ class TelemetryFrame:
     steering_rad: float = 0.0
     imu_yaw_rate: float = 0.0
     frame_jpeg: bytes = b""
+    timestamp_ns: int = 0
+    last_scan: dict | None = None
+    last_imu: dict | None = None
+
+
+@dataclass
+class SlamStats:
+    """SLAM pipeline statistics for UI."""
+    fps: float = 0.0
+    latency_ms: float = 0.0
+    scan_count: int = 0
+    map_updates: int = 0
+    pose_updates: int = 0
+    status: str = "unknown"  # initializing, mapping, localized, degraded, failed
 
 
 @dataclass

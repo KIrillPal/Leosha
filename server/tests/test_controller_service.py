@@ -6,6 +6,8 @@ def test_controller_mode_switch(runtime):
     assert controller.active_mode == ControlMode.PAUSE
     controller.set_mode("teleoperation")
     assert controller.active_mode == ControlMode.TELEOPERATION
+    controller.set_mode("teleop_slam")
+    assert controller.active_mode == ControlMode.TELEOP_SLAM
     controller.set_mode("autonomy_profile_1")
     assert controller.active_mode == ControlMode.AUTONOMY_PROFILE_1
 

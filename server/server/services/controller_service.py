@@ -5,7 +5,7 @@ import threading
 from dataclasses import dataclass
 from time import monotonic, sleep
 
-from ..algorithms import AutonomyProfile1, PauseProfile, TeleoperationProfile
+from ..algorithms import AutonomyProfile1, PauseProfile, TeleoperationProfile, TeleopSlamProfile
 from ..interfaces import AlgorithmContext, OperationProfile
 from ..models import ControlCommand, ControlMode, ManualInputState, TelemetryFrame
 from .robot_client import RobotClient
@@ -29,12 +29,19 @@ class TeleopUiState:
 
 
 class ControllerService:
-    def __init__(self, robot_client: RobotClient, context: AlgorithmContext) -> None:
+    def __init__(
+        self,
+        robot_client: RobotClient,
+        context: AlgorithmContext,
+        slam_service=None,
+    ) -> None:
         self._robot = robot_client
         self._context = context
+        self._slam_service = slam_service
         self._profiles: dict[ControlMode, OperationProfile] = {
             ControlMode.PAUSE: PauseProfile(),
             ControlMode.TELEOPERATION: TeleoperationProfile(),
+            ControlMode.TELEOP_SLAM: TeleopSlamProfile(),
             ControlMode.AUTONOMY_PROFILE_1: AutonomyProfile1(),
         }
         self._active_mode = ControlMode.PAUSE
@@ -95,7 +102,6 @@ class ControllerService:
         c = self._last_command
         head = None
         if robot_config:
-            # Полный конфиг: robot_geometry.head; ранее передавали только head
             head = (robot_config.get("robot_geometry") or {}).get("head") or robot_config.get("head")
         if head is not None and isinstance(head, dict):
             pan_deg = _head_axis_to_deg(
@@ -148,6 +154,8 @@ class ControllerService:
     def tick_once(self) -> ControlCommand:
         telemetry = self._robot.get_latest_telemetry()
         robot_config = self._robot.get_robot_config()
+        if self._slam_service and self.active_mode == ControlMode.TELEOP_SLAM:
+            self._slam_service.update_from_telemetry()
         with self._lock:
             command = self._profiles[self._active_mode].algorithm.compute_command(
                 self._context, self._manual, telemetry, robot_config=robot_config

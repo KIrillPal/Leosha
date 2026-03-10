@@ -14,6 +14,8 @@ from server.config import load_server_config
 from server.interfaces import AlgorithmContext
 from server.services.controller_service import ControllerService
 from server.services.robot_client import MockRobotClient
+from server.services.slam_service import SlamService
+from server.services.ros_graph_service import RosGraphService
 from server.web.app_factory import create_app
 
 
@@ -48,3 +50,26 @@ def runtime():
 def client(runtime):
     app, _, _ = runtime
     return app.test_client()
+
+
+@pytest.fixture()
+def runtime_with_slam():
+    """Runtime with slam_service and ros_graph for teleop-slam tests."""
+    cfg_path = _configs_dir() / "server.yaml"
+    cfg = load_server_config(cfg_path)
+    robot = MockRobotClient(ip=cfg.robot.ip)
+    context = AlgorithmContext(head_sensitivity=cfg.control.head_sensitivity)
+    slam_service = SlamService(robot)
+    ros_graph = RosGraphService()
+    controller = ControllerService(robot, context=context, slam_service=slam_service)
+    app = create_app(controller, robot, cfg, slam_service=slam_service, ros_graph=ros_graph)
+    app.config.update(TESTING=True)
+    yield app, controller, robot, slam_service, ros_graph
+    controller.stop_command_loop()
+    robot.close()
+
+
+@pytest.fixture()
+def client_with_slam(runtime_with_slam):
+    app, controller, robot, slam_service, ros_graph = runtime_with_slam
+    return app, controller

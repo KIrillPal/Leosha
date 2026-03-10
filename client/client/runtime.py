@@ -49,14 +49,16 @@ class ClientRuntime:
         self._stop = threading.Event()
         self._threads: list[threading.Thread] = []
         head_cfg = config.robot_geometry.head
+        teleop_exec = TeleoperationExecutor(
+            head_pan_min_deg=head_cfg.neck_min_deg,
+            head_pan_max_deg=head_cfg.neck_max_deg,
+            head_tilt_min_deg=head_cfg.face_min_deg,
+            head_tilt_max_deg=head_cfg.face_max_deg,
+        )
         self._executors = {
             OperatingMode.PAUSE: PauseExecutor(),
-            OperatingMode.TELEOPERATION: TeleoperationExecutor(
-                head_pan_min_deg=head_cfg.neck_min_deg,
-                head_pan_max_deg=head_cfg.neck_max_deg,
-                head_tilt_min_deg=head_cfg.face_min_deg,
-                head_tilt_max_deg=head_cfg.face_max_deg,
-            ),
+            OperatingMode.TELEOPERATION: teleop_exec,
+            OperatingMode.TELEOP_SLAM: teleop_exec,
             OperatingMode.AUTONOMY_PROFILE_1: AutonomyExecutor(
                 head_pan_min_deg=head_cfg.neck_min_deg,
                 head_pan_max_deg=head_cfg.neck_max_deg,

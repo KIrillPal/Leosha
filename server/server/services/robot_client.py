@@ -54,6 +54,7 @@ class _Counters:
 _CLIENT_MODE_TO_SERVER = {
     "pause": ControlMode.PAUSE,
     "teleoperation": ControlMode.TELEOPERATION,
+    "teleop_slam": ControlMode.TELEOP_SLAM,
     "autonomy_profile_1": ControlMode.AUTONOMY_PROFILE_1,
 }
 
@@ -281,6 +282,7 @@ class ZmqRobotClient:
 
         with self._lock:
             self._telemetry.timestamp = now
+            self._telemetry.timestamp_ns = int(header.get("timestamp_ns", 0))
             self._telemetry.odom_x = float(pose.get("x", 0.0))
             self._telemetry.odom_y = float(pose.get("y", 0.0))
             self._telemetry.odom_yaw = float(pose.get("theta", 0.0))
@@ -289,9 +291,10 @@ class ZmqRobotClient:
             self._telemetry.imu_yaw_rate = float(imu_yaw_rate)
             self._telemetry.frame_jpeg = frame_jpeg
             self._latest_frame = frame_jpeg
+            self._telemetry.last_imu = imu_readings[-1] if imu_readings else None
             scan = header.get("scan")
             if isinstance(scan, dict):
-                self._latest_lidar_scan = {
+                scan_dict = {
                     "timestamp_ns": int(scan.get("timestamp_ns", 0)),
                     "angle_min": float(scan.get("angle_min", 0.0)),
                     "angle_max": float(scan.get("angle_max", 0.0)),
@@ -301,6 +304,10 @@ class ZmqRobotClient:
                     "ranges": list(scan.get("ranges", [])),
                     "intensities": list(scan.get("intensities", [])),
                 }
+                self._latest_lidar_scan = scan_dict
+                self._telemetry.last_scan = scan_dict
+            else:
+                self._telemetry.last_scan = None
 
             self._counters.rx_packets += 1
             self._counters.rx_bytes += len(header_raw) + len(frame_jpeg)

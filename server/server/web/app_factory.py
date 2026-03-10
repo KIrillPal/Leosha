@@ -14,7 +14,13 @@ from ..services.robot_client import RobotClient
 LOGGER = logging.getLogger(__name__)
 
 
-def create_app(controller: ControllerService, robot_client: RobotClient, config: ServerConfig) -> Flask:
+def create_app(
+    controller: ControllerService,
+    robot_client: RobotClient,
+    config: ServerConfig,
+    slam_service=None,
+    ros_graph=None,
+) -> Flask:
     try:
         from ament_index_python.packages import get_package_share_directory
         _share = get_package_share_directory("server")
@@ -44,6 +50,14 @@ def create_app(controller: ControllerService, robot_client: RobotClient, config:
     @app.get("/lidar")
     def lidar_page():
         return render_template("lidar.html", active_tab="lidar")
+
+    @app.get("/slam")
+    def slam_page():
+        return render_template("slam.html", active_tab="slam")
+
+    @app.get("/ros-graph")
+    def ros_graph_page():
+        return render_template("ros_graph.html", active_tab="ros_graph")
 
     @app.get("/video_feed")
     def video_feed():
@@ -168,6 +182,44 @@ def create_app(controller: ControllerService, robot_client: RobotClient, config:
             "rx_packets_per_sec": round(stats.rx_packets_per_sec, 2),
             "avg_packet_parts": {k: round(v, 1) for k, v in parts.items()},
         })
+
+    @app.get("/api/slam/status")
+    def get_slam_status():
+        if slam_service is None:
+            return jsonify({"success": False, "error": "SLAM service not available"})
+        stats = slam_service.get_stats()
+        return jsonify({
+            "success": True,
+            "fps": stats.fps,
+            "latency_ms": stats.latency_ms,
+            "scan_count": stats.scan_count,
+            "map_updates": stats.map_updates,
+            "pose_updates": stats.pose_updates,
+            "status": stats.status,
+        })
+
+    @app.get("/api/slam/map")
+    def get_slam_map():
+        if slam_service is None:
+            return Response(b"", status=404)
+        png = slam_service.get_map_png()
+        if png is None:
+            return Response(b"", status=404)
+        return Response(png, mimetype="image/png")
+
+    @app.get("/api/slam/pose")
+    def get_slam_pose():
+        if slam_service is None:
+            return jsonify({"success": False})
+        x, y, theta = slam_service.get_pose()
+        return jsonify({"success": True, "x": x, "y": y, "theta": theta})
+
+    @app.get("/api/ros/graph")
+    def get_ros_graph():
+        if ros_graph is None:
+            return jsonify({"success": False, "nodes": []})
+        nodes = ros_graph.get_graph()
+        return jsonify({"success": True, "nodes": nodes})
 
     @app.get("/api/lidar")
     def get_lidar_scan():

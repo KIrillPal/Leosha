@@ -2,6 +2,9 @@ def test_tabs_available(client):
     assert client.get("/settings").status_code == 200
     assert client.get("/teleop").status_code == 200
     assert client.get("/network").status_code == 200
+    assert client.get("/lidar").status_code == 200
+    assert client.get("/slam").status_code == 200
+    assert client.get("/ros-graph").status_code == 200
 
 
 def test_settings_and_mode_switch(client):

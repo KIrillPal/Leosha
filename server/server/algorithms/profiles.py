@@ -26,6 +26,8 @@ class PauseAlgorithm(ControlAlgorithm):
 
 
 class SlamTeleoperationAlgorithm(ControlAlgorithm):
+    """Base teleop algorithm; mode/name overridden by subclasses."""
+
     def __init__(self) -> None:
         self._head_pan = 0.0
         self._head_tilt = 0.0
@@ -36,7 +38,7 @@ class SlamTeleoperationAlgorithm(ControlAlgorithm):
 
     @property
     def name(self) -> str:
-        return "SLAM + телеуправление"
+        return "Телеуправление"
 
     def compute_command(
         self,
@@ -121,6 +123,18 @@ class PauseProfile(OperationProfile):
         return self._algorithm
 
 
+class TeleopSlamAlgorithm(SlamTeleoperationAlgorithm):
+    """Same control as teleop, but mode=TELEOP_SLAM for SLAM pipeline activation."""
+
+    @property
+    def mode(self) -> ControlMode:
+        return ControlMode.TELEOP_SLAM
+
+    @property
+    def name(self) -> str:
+        return "Телеуправление + SLAM"
+
+
 @dataclass
 class TeleoperationProfile(OperationProfile):
     _algorithm: ControlAlgorithm = field(default_factory=SlamTeleoperationAlgorithm)
@@ -131,7 +145,24 @@ class TeleoperationProfile(OperationProfile):
 
     @property
     def title(self) -> str:
-        return "Телеуправление (SLAM)"
+        return "Телеуправление"
+
+    @property
+    def algorithm(self) -> ControlAlgorithm:
+        return self._algorithm
+
+
+@dataclass
+class TeleopSlamProfile(OperationProfile):
+    _algorithm: ControlAlgorithm = field(default_factory=TeleopSlamAlgorithm)
+
+    @property
+    def mode(self) -> ControlMode:
+        return ControlMode.TELEOP_SLAM
+
+    @property
+    def title(self) -> str:
+        return "Телеуправление + SLAM"
 
     @property
     def algorithm(self) -> ControlAlgorithm:

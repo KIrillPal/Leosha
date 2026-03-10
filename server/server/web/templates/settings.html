@@ -16,6 +16,7 @@
         <select id="modeSelect">
             <option value="pause">pause</option>
             <option value="teleoperation">teleoperation</option>
+            <option value="teleop_slam">teleop_slam</option>
             <option value="autonomy_profile_1">autonomy_profile_1</option>
         </select>
         <div style="margin-top:10px;"><button onclick="setMode()">Применить режим</button></div>
@@ -27,6 +28,10 @@ async function loadSettings() {
     const data = await (await fetch('/api/settings')).json();
     ipInput.value = data.ip || '';
     modeSelect.value = data.mode || 'pause';
+    if (data.available_modes && data.available_modes.length) {
+        modeSelect.innerHTML = data.available_modes.map(m => '<option value="' + m + '">' + m + '</option>').join('');
+        modeSelect.value = data.mode || data.available_modes[0];
+    }
     modeStatus.textContent = `Текущий режим: ${data.mode}`;
     ipStatus.textContent = `Статус: ${data.connected ? 'подключен' : 'нет подключения'}; ping=${data.last_ping_ms ?? '-'} ms`;
 }

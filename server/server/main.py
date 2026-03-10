@@ -10,6 +10,8 @@ from .logging_setup import configure_pipeline_logging
 from .ros_node import Ros2ServerBridge
 from .services.controller_service import ControllerService
 from .services.robot_client import MockRobotClient, ZmqRobotClient
+from .services.slam_service import SlamService
+from .services.ros_graph_service import RosGraphService
 from .web.app_factory import create_app
 
 LOGGER = logging.getLogger(__name__)
@@ -44,9 +46,11 @@ def build_runtime(config_path: str, transport: str = ""):
     cfg = load_server_config(config_path)
     robot = _create_robot_client(cfg, transport)
     context = AlgorithmContext(head_sensitivity=cfg.control.head_sensitivity)
-    controller = ControllerService(robot, context=context)
-    app = create_app(controller, robot, cfg)
-    return cfg, app, controller, robot
+    slam_service = SlamService(robot)
+    ros_graph = RosGraphService()
+    controller = ControllerService(robot, context=context, slam_service=slam_service)
+    app = create_app(controller, robot, cfg, slam_service=slam_service, ros_graph=ros_graph)
+    return cfg, app, controller, robot, slam_service, ros_graph
 
 
 def main() -> None:
@@ -66,8 +70,8 @@ def main() -> None:
         args.config, args.transport or "(from config)", log_path,
     )
 
-    cfg, app, controller, robot = build_runtime(args.config, args.transport)
-    ros_bridge = Ros2ServerBridge()
+    cfg, app, controller, robot, slam_service, ros_graph = build_runtime(args.config, args.transport)
+    ros_bridge = Ros2ServerBridge(slam_service=slam_service)
     ros_bridge.start()
     controller.start_command_loop(cfg.app.command_hz)
 

@@ -42,9 +42,14 @@ setup(
             "server/web/templates/teleop.html",
             "server/web/templates/network.html",
             "server/web/templates/lidar.html",
+            "server/web/templates/slam.html",
+            "server/web/templates/ros_graph.html",
         ]),
         (f"share/{package_name}/config", ["config/server.yaml"]),
-        (f"share/{package_name}/launch", ["launch/server.launch.py"]),
+        (f"share/{package_name}/launch", [
+            "launch/server.launch.py",
+            "launch/teleop_slam.launch.py",
+        ]),
     ],
     install_requires=[
         "setuptools",
