@@ -28,6 +28,7 @@ def _make_thread(
 ):
     cfg = copy.deepcopy(client_config)
     cfg.sensors.lidar.invert_angle = invert_angle
+    cfg.sensors.lidar.zero_angle_deg = 0.0  # выходной угол = сырой, чтобы слепая зона в градусах совпадала с углами точек
     cfg.robot_geometry.lidar.blind_zone.angle_start_deg = blind_start_deg
     cfg.robot_geometry.lidar.blind_zone.angle_end_deg = blind_end_deg
     cfg.robot_geometry.lidar.blind_zone.max_distance_m = max_distance_m
@@ -62,8 +63,9 @@ def test_lidar_blind_zone_filters_near_points_without_inversion(client_config):
     assert scan.angle_min < scan.angle_max
     assert scan.angle_increment > 0.0
     assert scan.ranges[0] == 1.0
-    assert math.isinf(scan.ranges[1])
-    assert math.isinf(scan.ranges[2])
+    # Слепая зона заполняется max_distance_m
+    assert scan.ranges[1] == 0.5
+    assert scan.ranges[2] == 0.5
     assert scan.ranges[3] == 1.1
 
 
@@ -87,9 +89,10 @@ def test_lidar_blind_zone_uses_inverted_output_angles(client_config):
 
     assert scan.angle_min < scan.angle_max
     assert scan.angle_increment > 0.0
-    assert scan.ranges[0] == 0.2
+    # При invert_angle сортировка ставит -90° первым → он в слепой зоне 60..120 (в выходных -120..-60), заполняется max_distance_m
+    assert scan.ranges[0] == 0.5
     assert scan.ranges[1] == 1.0
-    assert math.isinf(scan.ranges[2])
+    assert scan.ranges[2] == 0.2
 
 
 def test_lidar_blind_zone_respects_distance_threshold_and_wraparound(client_config):
@@ -112,4 +115,5 @@ def test_lidar_blind_zone_respects_distance_threshold_and_wraparound(client_conf
 
     assert scan.ranges[0] == 0.8
     assert scan.ranges[1] == 0.2
-    assert math.isinf(scan.ranges[2])
+    # Слепая зона заполняется max_distance_m
+    assert scan.ranges[2] == 0.5
