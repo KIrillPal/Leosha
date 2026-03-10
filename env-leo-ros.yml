@@ -1,0 +1,26 @@
+# Conda environment for LEO server with ROS2 (rclpy)
+# Usage:
+#   conda env create -f env-leo-ros.yml
+#   conda activate leo-ros
+#
+# Before build/run, source ROS2:
+#   source /opt/ros/humble/setup.bash
+#
+# Build: colcon build --packages-select server
+# Run:   ros2 launch server server.launch.py
+
+name: leo-ros
+channels:
+  - defaults
+dependencies:
+  - python=3.10
+  - pip
+  - pip:
+    - Flask>=2.2
+    - numpy>=1.24
+    - Pillow>=9.0
+    - PyYAML>=6.0
+    - pyzmq>=25.0
+    - msgpack>=1.0
+    - pytest>=7.0
+    - lark  # required by ROS2 launch (launch_testing)
