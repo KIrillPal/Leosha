@@ -115,7 +115,7 @@ sensors:
     range_min_m: 0.02
     range_max_m: 8.0
     intensity_enabled: true
-    invert_angle: true
+    invert_angle: false
     zero_angle_deg: -90  # угол «вперёд» в сырых градусах лидара; после сдвига на нём будет 0°
     healthcheck_timeout_sec: 10.0
     healthcheck_test_timeout_sec: 15.0
