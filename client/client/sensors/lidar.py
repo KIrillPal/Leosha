@@ -161,16 +161,15 @@ class TMiniProPlusLidarThread(threading.Thread):
         intensities = [float(getattr(p, "intensity", 0.0)) for p in points]
 
         blind = self._geometry.lidar.blind_zone
-        zero_deg = float(self._cfg.zero_angle_deg)
-        start_blind = float(blind.angle_start_deg) - zero_deg
-        end_blind = float(blind.angle_end_deg) - zero_deg
+        start_blind = float(blind.angle_start_deg)
+        end_blind = float(blind.angle_end_deg)
         if bool(self._cfg.invert_angle):
             start_blind, end_blind = -end_blind, -start_blind
         filtered_ranges = []
         for angle_rad, dist in zip(angles, ranges):
             angle_deg = math.degrees(angle_rad)
-            if _angle_in_sector(angle_deg, start_blind, end_blind):
-                filtered_ranges.append(float(5.0))
+            if _angle_in_sector(angle_deg, start_blind, end_blind) and dist < blind.max_distance_m:
+                filtered_ranges.append(float(blind.max_distance_m))
             else:
                 filtered_ranges.append(dist)
 
