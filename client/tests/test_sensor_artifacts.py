@@ -134,7 +134,9 @@ def test_camera_thread_writes_frame_artifact(monkeypatch, client_config):
         return arr.raw
 
     def _imencode(_ext, img, _params):
-        return True, _FakeEncoded(b"\xff\xd8FAKEJPEG\xff\xd9" + img[:64])
+        raw = getattr(img, "raw", img)
+        suffix = raw[:64] if isinstance(raw, (bytes, bytearray)) else b""
+        return True, _FakeEncoded(b"\xff\xd8FAKEJPEG\xff\xd9" + suffix)
 
     fake_cv2_mod = types.SimpleNamespace(
         COLOR_RGB2BGR=1,
@@ -176,7 +178,8 @@ def test_lidar_thread_writes_map_artifact(monkeypatch, client_config):
     cfg.sensors.lidar.scan_hz = 8.0
     cfg.sensors.lidar.fail_policy.max_consecutive_failures = 3
     cfg.sensors.lidar.fail_policy.auto_disable_on_fail = True
-    # Blind zone covering fake points at ~±11.5° (rad -0.2..0.2) with r=0.2 so they become inf
+    # Слепая зона: точки в -15..15° с dist < max_distance_m заполняются max_distance_m
+    cfg.sensors.lidar.zero_angle_deg = 0.0
     cfg.robot_geometry.lidar.blind_zone.angle_start_deg = -15.0
     cfg.robot_geometry.lidar.blind_zone.angle_end_deg = 15.0
     cfg.robot_geometry.lidar.blind_zone.max_distance_m = 0.5
@@ -264,8 +267,8 @@ def test_lidar_thread_writes_map_artifact(monkeypatch, client_config):
     assert snap.scan is not None
     status = statuses.snapshot()["lidar"]
     assert status.healthy is True
-    # Проверяем, что часть лучей в blind-zone отфильтрована.
-    assert any((not math.isfinite(v)) for v in snap.scan.ranges)
+    # Проверяем, что часть лучей в слепой зоне заполнена max_distance_m
+    assert any(v == 0.5 for v in snap.scan.ranges)
 
     artifact_path = ARTIFACTS_DIR / "lidar_map.png"
     _render_lidar_map_png(artifact_path, snap.scan.ranges, snap.scan.angle_min, snap.scan.angle_increment)
