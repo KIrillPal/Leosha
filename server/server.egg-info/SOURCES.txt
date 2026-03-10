@@ -2,13 +2,14 @@ README.md
 package.xml
 setup.cfg
 setup.py
-/home/KIR/Leosha/code/configs/server.yaml
+config/server.yaml
 launch/server.launch.py
 resource/server
 scripts/server
 server/__init__.py
 server/config.py
 server/interfaces.py
+server/logging_setup.py
 server/main.py
 server/models.py
 server/ros_node.py
@@ -26,6 +27,7 @@ server/services/robot_client.py
 server/web/__init__.py
 server/web/app_factory.py
 server/web/templates/base.html
+server/web/templates/lidar.html
 server/web/templates/network.html
 server/web/templates/settings.html
 server/web/templates/teleop.html
@@ -33,3 +35,4 @@ tests/test_algorithms.py
 tests/test_config.py
 tests/test_controller_service.py
 tests/test_web_api.py
+tests/test_zmq_connectivity.py

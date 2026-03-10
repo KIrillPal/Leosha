@@ -10,6 +10,8 @@ Requires-Dist: Flask>=2.2
 Requires-Dist: numpy>=1.24
 Requires-Dist: Pillow>=9.0
 Requires-Dist: PyYAML>=6.0
+Requires-Dist: pyzmq>=25.0
+Requires-Dist: msgpack>=1.0
 Provides-Extra: test
 Requires-Dist: pytest>=7.0; extra == "test"
 Dynamic: license

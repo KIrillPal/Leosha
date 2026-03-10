@@ -1,8 +1,14 @@
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 import pytest
+
+# Ensure local server package is used (over installed one) when running tests
+_server_root = Path(__file__).resolve().parents[1]
+if str(_server_root) not in sys.path:
+    sys.path.insert(0, str(_server_root))
 
 from server.config import load_server_config
 from server.interfaces import AlgorithmContext
