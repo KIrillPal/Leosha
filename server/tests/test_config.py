@@ -12,4 +12,4 @@ def test_yaml_config_loads():
     cfg = load_server_config(path)
     assert cfg.app.port > 0
     assert cfg.robot.ip
-    assert cfg.control.max_speed_fast >= cfg.control.max_speed_normal
+    assert isinstance(cfg.control.head_sensitivity, (int, float))
