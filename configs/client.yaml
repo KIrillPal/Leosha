@@ -145,7 +145,7 @@ sensors:
       retry_interval_sec: 0.2
   ultrasonic:
     enabled: false
-    required_for_motion: true
+    required_for_motion: false
     hz: 10.0
     emergency_stop_distance_m: 0.2
     fail_policy:
