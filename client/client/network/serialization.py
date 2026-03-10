@@ -208,6 +208,7 @@ def pack_telemetry_packet(packet: TelemetryPacket) -> tuple[bytes, bytes]:
         "sensor_timing": {k: _pack_sensor_timing(v) for k, v in packet.sensor_timing.items()},
         "telemetry_pack_us": packet.telemetry_pack_us,
         "telemetry_send_us": packet.telemetry_send_us,
+        "odom_confidence": packet.odom_confidence,
         "frame_size": len(packet.frame_jpeg),
     }
     if packet.robot_config is not None:

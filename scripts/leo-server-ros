@@ -10,4 +10,5 @@ conda activate leo-ros
 cd "${0:A:h}/.."
 colcon build --packages-select server
 source install/setup.zsh 2>/dev/null || source install/setup.bash
-ros2 launch server server.launch.py "$@"
+# Для SLAM (карта, pose) используйте teleop_slam.launch.py
+ros2 launch server teleop_slam.launch.py "$@"

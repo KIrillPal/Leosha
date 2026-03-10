@@ -45,7 +45,10 @@ setup(
             "server/web/templates/slam.html",
             "server/web/templates/ros_graph.html",
         ]),
-        (f"share/{package_name}/config", ["config/server.yaml"]),
+        (f"share/{package_name}/config", [
+            "config/server.yaml",
+            "config/slam_params.yaml",
+        ]),
         (f"share/{package_name}/launch", [
             "launch/server.launch.py",
             "launch/teleop_slam.launch.py",

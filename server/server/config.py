@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -38,11 +38,18 @@ class NetworkSection:
 
 
 @dataclass
+class SlamSection:
+    """Порог уверенности в одометрии: если odom_confidence < порог, в TF идёт pose из slam_toolbox."""
+    odom_confidence_threshold: float = 0.5
+
+
+@dataclass
 class ServerConfig:
     app: AppSection
     robot: RobotSection
     control: ControlSection
     network: NetworkSection
+    slam: SlamSection = field(default_factory=SlamSection)
 
 
 def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
@@ -76,9 +83,12 @@ def load_server_config(path: str | Path) -> ServerConfig:
     with config_path.open("r", encoding="utf-8") as f:
         data = yaml.safe_load(f) or {}
 
+    slam_data = data.get("slam") or {}
+    slam = SlamSection(**slam_data) if slam_data else SlamSection()
     return ServerConfig(
         app=AppSection(**data["app"]),
         robot=RobotSection(**data["robot"]),
         control=ControlSection(**data["control"]),
         network=NetworkSection(**data["network"]),
+        slam=slam,
     )

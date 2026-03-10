@@ -286,6 +286,7 @@ class ZmqRobotClient:
             self._telemetry.odom_x = float(pose.get("x", 0.0))
             self._telemetry.odom_y = float(pose.get("y", 0.0))
             self._telemetry.odom_yaw = float(pose.get("theta", 0.0))
+            self._telemetry.odom_confidence = float(header.get("odom_confidence", 0.0))
             self._telemetry.speed_mps = float(vel.get("linear", 0.0))
             self._telemetry.steering_rad = float(odom.get("steering_angle", 0.0))
             self._telemetry.imu_yaw_rate = float(imu_yaw_rate)
@@ -362,7 +363,7 @@ class MockRobotClient:
     def __init__(self, ip: str = "127.0.0.1") -> None:
         self._status = RobotConnectionStatus(ip=ip, connected=True, last_ping_ms=1.2)
         self._last_command = ControlCommand()
-        self._telemetry = TelemetryFrame(frame_jpeg=self._FRAME_JPEG)
+        self._telemetry = TelemetryFrame(frame_jpeg=self._FRAME_JPEG, odom_confidence=1.0)
         self._lock = threading.Lock()
         self._stop = threading.Event()
         self._counters = _Counters()

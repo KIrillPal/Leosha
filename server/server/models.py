@@ -31,6 +31,7 @@ class TelemetryFrame:
     odom_x: float = 0.0
     odom_y: float = 0.0
     odom_yaw: float = 0.0
+    odom_confidence: float = 0.0  # 0..1 from client; if < slam threshold use SLAM pose for TF
     speed_mps: float = 0.0
     steering_rad: float = 0.0
     imu_yaw_rate: float = 0.0

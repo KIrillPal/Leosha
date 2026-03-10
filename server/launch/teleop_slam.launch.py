@@ -2,7 +2,7 @@
 
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
-from launch.substitutions import LaunchConfiguration
+from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.substitutions import FindPackageShare
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 
@@ -48,6 +48,9 @@ def generate_launch_description():
             ]),
             launch_arguments={
                 "use_sim_time": "false",
+                "slam_params_file": PathJoinSubstitution([
+                    FindPackageShare("server"), "config", "slam_params.yaml",
+                ]),
             }.items(),
             condition=IfCondition(LaunchConfiguration("use_slam")),
         )

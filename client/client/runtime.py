@@ -207,6 +207,11 @@ class ClientRuntime:
                     steering_angle=0.0,
                 )
             robot_config = client_config_to_dict(self.config)
+            odom_confidence = (
+                1.0
+                if (self.config.sensors.encoder.enabled and self.config.sensors.imu.enabled)
+                else 0.0
+            )
             packet = TelemetryPacket(
                 seq=self._next_seq(),
                 timestamp_ns=snapshot.captured_at_ns,
@@ -223,6 +228,7 @@ class ClientRuntime:
                 sensor_status=self.sensor_statuses.snapshot(),
                 sensor_timing=self.stats.drain_all(),
                 telemetry_pack_us=(monotonic_ns() - t0) / 1000.0,
+                odom_confidence=odom_confidence,
                 robot_config=robot_config,
             )
             send_start = monotonic_ns()

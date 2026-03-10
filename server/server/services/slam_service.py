@@ -56,6 +56,8 @@ class SlamService:
             self._state.map_png = map_png
             self._state.map_updates += 1
             self._state.last_map_t = monotonic()
+            if self._state.status == "initializing":
+                self._state.status = "mapping"
 
     def update_pose(self, x: float, y: float, theta: float) -> None:
         """Called when new pose arrives (e.g. from ROS subscriber)."""
@@ -65,6 +67,8 @@ class SlamService:
             self._state.pose_theta = theta
             self._state.pose_updates += 1
             self._state.last_pose_t = monotonic()
+            if self._state.status == "initializing":
+                self._state.status = "mapping"
 
     def get_stats(self) -> SlamStats:
         with self._lock:

@@ -71,7 +71,11 @@ def main() -> None:
     )
 
     cfg, app, controller, robot, slam_service, ros_graph = build_runtime(args.config, args.transport)
-    ros_bridge = Ros2ServerBridge(slam_service=slam_service)
+    ros_bridge = Ros2ServerBridge(
+        slam_service=slam_service,
+        robot_client=robot,
+        odom_confidence_threshold=cfg.slam.odom_confidence_threshold,
+    )
     ros_bridge.start()
     controller.start_command_loop(cfg.app.command_hz)
 
