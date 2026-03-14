@@ -10,6 +10,18 @@ robot:
 control:
   head_sensitivity: -0.002
 
+profiles:
+  pause: {}
+  teleoperation: {}
+  teleop_slam: {}
+  autonomy_profile_1: {}
+  following:
+    friend_embeddings_db: "data/friends.db"
+    approach_distance_m: 1.0
+    max_head_tilt_deg: 60.0
+    average_human_height_m: 1.7
+    yolo_model: "yolov8n.pt"
+
 network:
   grafana_url: ""
   bind_address: "0.0.0.0"
