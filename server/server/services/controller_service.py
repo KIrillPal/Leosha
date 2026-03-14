@@ -181,21 +181,23 @@ class ControllerService:
             self._pending_actions.append(dict(action))
 
     def _command_status(self, robot_config: dict | None) -> dict:
-        if robot_config is None:
-            raise ValueError("robot_config is required for command status")
         c = self._last_command
-        robot_geometry = robot_config["robot_geometry"]
-        head = robot_geometry["head"]
-        pan_deg = _head_axis_to_deg(
-            c.head_pan,
-            float(head["neck_min_deg"]),
-            float(head["neck_max_deg"]),
-        )
-        tilt_deg = _head_axis_to_deg(
-            c.head_tilt,
-            float(head["face_min_deg"]),
-            float(head["face_max_deg"]),
-        )
+        if robot_config is not None and "robot_geometry" in robot_config and "head" in robot_config["robot_geometry"]:
+            head = robot_config["robot_geometry"]["head"]
+            pan_deg = _head_axis_to_deg(
+                c.head_pan,
+                float(head["neck_min_deg"]),
+                float(head["neck_max_deg"]),
+            )
+            tilt_deg = _head_axis_to_deg(
+                c.head_tilt,
+                float(head["face_min_deg"]),
+                float(head["face_max_deg"]),
+            )
+        else:
+            # Display fallback when robot has not sent config yet (e.g. SLAM tab)
+            pan_deg = float(c.head_pan) * 60.0
+            tilt_deg = float(c.head_tilt) * 45.0
         return {
             "speed": float(c.speed),
             "steering": float(c.steering),
