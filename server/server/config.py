@@ -26,6 +26,21 @@ class ControlSection:
 
 
 @dataclass
+class ProfilesSection:
+    """Per-profile runtime configuration.
+
+    Hardcoded profile classes are still defined in code, but each gets a
+    dedicated YAML subsection for tuning behavior.
+    """
+
+    pause: dict[str, Any] = field(default_factory=dict)
+    teleoperation: dict[str, Any] = field(default_factory=dict)
+    teleop_slam: dict[str, Any] = field(default_factory=dict)
+    autonomy_profile_1: dict[str, Any] = field(default_factory=dict)
+    following: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
 class NetworkSection:
     grafana_url: str
     bind_address: str = "0.0.0.0"
@@ -49,6 +64,7 @@ class ServerConfig:
     robot: RobotSection
     control: ControlSection
     network: NetworkSection
+    profiles: ProfilesSection = field(default_factory=ProfilesSection)
     slam: SlamSection = field(default_factory=SlamSection)
 
 
@@ -85,10 +101,13 @@ def load_server_config(path: str | Path) -> ServerConfig:
 
     slam_data = data.get("slam") or {}
     slam = SlamSection(**slam_data) if slam_data else SlamSection()
+    profiles_data = data.get("profiles") or {}
+    profiles = ProfilesSection(**profiles_data) if profiles_data else ProfilesSection()
     return ServerConfig(
         app=AppSection(**data["app"]),
         robot=RobotSection(**data["robot"]),
         control=ControlSection(**data["control"]),
+        profiles=profiles,
         network=NetworkSection(**data["network"]),
         slam=slam,
     )

@@ -50,7 +50,17 @@ def build_runtime(config_path: str, transport: str = ""):
     ros_graph = RosGraphService()
     state_file = Path(config_path).resolve().parent / "server_state.yaml"
     controller = ControllerService(
-        robot, context=context, slam_service=slam_service, state_file=state_file
+        robot,
+        context=context,
+        slam_service=slam_service,
+        state_file=state_file,
+        profiles_config={
+            "pause": cfg.profiles.pause,
+            "teleoperation": cfg.profiles.teleoperation,
+            "teleop_slam": cfg.profiles.teleop_slam,
+            "autonomy_profile_1": cfg.profiles.autonomy_profile_1,
+            "following": cfg.profiles.following,
+        },
     )
     app = create_app(controller, robot, cfg, slam_service=slam_service, ros_graph=ros_graph)
     return cfg, app, controller, robot, slam_service, ros_graph
@@ -79,6 +89,7 @@ def main() -> None:
         robot_client=robot,
         odom_confidence_threshold=cfg.slam.odom_confidence_threshold,
         get_control_mode=lambda: controller.active_mode,
+        is_slam_active=controller.is_slam_active,
     )
     ros_bridge.start()
     controller.start_command_loop(cfg.app.command_hz)

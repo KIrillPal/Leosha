@@ -1,52 +1,77 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
-from ..interfaces import AlgorithmContext, AutonomyAlgorithm, ControlAlgorithm, OperationProfile
+from ..interfaces import AlgorithmContext, InputState, OperationProfile
 from ..models import ControlCommand, ControlMode, ManualInputState, TelemetryFrame
 
 
-class PauseAlgorithm(ControlAlgorithm):
+class BaseControlProfile(OperationProfile):
+    """Reusable base profile for all behavior modes."""
+
+    @property
+    def algorithm(self):
+        # Backwards compatibility with legacy tests.
+        return self
+
+    def compute_command(
+        self,
+        context: AlgorithmContext,
+        manual: ManualInputState,
+        telemetry: TelemetryFrame,
+        robot_config: dict | None = None,
+    ) -> ControlCommand:
+        state = InputState(
+            manual=manual,
+            telemetry=telemetry,
+            robot_config=robot_config,
+        )
+        command = self.tick(context, state)
+        self.post_tick(state)
+        return command
+
+
+class PauseProfile(BaseControlProfile):
     @property
     def mode(self) -> ControlMode:
         return ControlMode.PAUSE
 
     @property
-    def name(self) -> str:
+    def title(self) -> str:
         return "Пауза"
 
-    def compute_command(
-        self,
-        context: AlgorithmContext,
-        manual: ManualInputState,
-        telemetry: TelemetryFrame,
-        robot_config: dict | None = None,
-    ) -> ControlCommand:
+    def tick(self, context: AlgorithmContext, input_state: InputState) -> ControlCommand:
+        del context, input_state
         return ControlCommand(mode=self.mode)
 
 
-class SlamTeleoperationAlgorithm(ControlAlgorithm):
-    """Base teleop algorithm; mode/name overridden by subclasses."""
+class TeleoperationProfile(BaseControlProfile):
+    """Teleoperation profile: consumes ManualInputState and produces driving command."""
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        *,
+        title: str = "Телеуправление",
+        control_mode: ControlMode = ControlMode.TELEOPERATION,
+    ) -> None:
+        self._title = title
+        self._control_mode = control_mode
         self._head_pan = 0.0
         self._head_tilt = 0.0
 
     @property
     def mode(self) -> ControlMode:
-        return ControlMode.TELEOPERATION
+        return self._control_mode
 
     @property
-    def name(self) -> str:
-        return "Телеуправление"
+    def title(self) -> str:
+        return self._title
 
-    def compute_command(
-        self,
-        context: AlgorithmContext,
-        manual: ManualInputState,
-        telemetry: TelemetryFrame,
-        robot_config: dict | None = None,
-    ) -> ControlCommand:
+    def tick(self, context: AlgorithmContext, input_state: InputState) -> ControlCommand:
+        manual = input_state.manual
+        telemetry = input_state.telemetry
+        robot_config = input_state.robot_config
+
         if not manual.tracking_enabled:
             return ControlCommand(mode=self.mode, head_pan=self._head_pan, head_tilt=self._head_tilt)
 
@@ -80,9 +105,45 @@ class SlamTeleoperationAlgorithm(ControlAlgorithm):
             mode=self.mode,
         )
 
+    def reset_runtime_state(self, manual: ManualInputState) -> None:
+        manual.head_dx = 0.0
+        manual.head_dy = 0.0
+        self._head_pan = 0.0
+        self._head_tilt = 0.0
 
-class PlaceholderAutonomyAlgorithm(AutonomyAlgorithm):
-    def __init__(self) -> None:
+    def post_tick(self, input_state: InputState) -> None:
+        # Consume one-shot mouse deltas after applying them in current tick.
+        input_state.manual.head_dx = 0.0
+        input_state.manual.head_dy = 0.0
+
+    def get_ui_state(self) -> dict:
+        return {
+            "x": float(self._head_pan),
+            "y": float(self._head_tilt),
+            "tracking_enabled": False,  # will be set by controller from ManualInputState
+        }
+
+    def save_state(self) -> dict:
+        return {"head_pan": self._head_pan, "head_tilt": self._head_tilt}
+
+    def restore_state(self, state: dict) -> None:
+        self._head_pan = float(state.get("head_pan", 0.0))
+        self._head_tilt = float(state.get("head_tilt", 0.0))
+
+
+class TeleopSlamProfile(TeleoperationProfile):
+    """Same teleop behavior as TeleoperationProfile, but marks SLAM as required."""
+
+    def __init__(self, **_: dict) -> None:
+        super().__init__(title="Телеуправление + SLAM", control_mode=ControlMode.TELEOP_SLAM)
+
+    @property
+    def requires_slam(self) -> bool:
+        return True
+
+
+class AutonomyProfile1(BaseControlProfile):
+    def __init__(self, **_: dict) -> None:
         self._target: dict = {}
 
     @property
@@ -90,97 +151,115 @@ class PlaceholderAutonomyAlgorithm(AutonomyAlgorithm):
         return ControlMode.AUTONOMY_PROFILE_1
 
     @property
-    def name(self) -> str:
+    def title(self) -> str:
         return "Самоуправление: профиль 1 (заглушка)"
 
     def set_target(self, target: dict) -> None:
         self._target = dict(target)
 
-    def compute_command(
-        self,
-        context: AlgorithmContext,
-        manual: ManualInputState,
-        telemetry: TelemetryFrame,
-        robot_config: dict | None = None,
-    ) -> ControlCommand:
+    def on_action(self, action: dict) -> None:
+        if action.get("type") == "set_target" and isinstance(action.get("target"), dict):
+            self.set_target(action["target"])
+
+    def tick(self, context: AlgorithmContext, input_state: InputState) -> ControlCommand:
+        del context, input_state
         return ControlCommand(mode=self.mode)
 
 
 @dataclass
-class PauseProfile(OperationProfile):
-    _algorithm: ControlAlgorithm = field(default_factory=PauseAlgorithm)
+class FollowingProfile(BaseControlProfile):
+    """Behavior skeleton: follow known person with camera/lidar fusion.
+
+    This profile is intentionally a non-functional skeleton. It documents how
+    advanced behavior should be architected in this project.
+    """
+
+    friend_embeddings_db: str = "data/friends.db"
+    approach_distance_m: float = 1.0
+    max_head_tilt_deg: float = 60.0
+    average_human_height_m: float = 1.7
+    yolo_model: str = "yolov8n.pt"
+
+    def __post_init__(self) -> None:
+        self._state = "idle"  # idle/searching/tracking/approaching/reached/lost
+        self._target_id: str | None = None
+        self._last_target_pose: tuple[float, float] | None = None
+        self._debug: dict = {}
 
     @property
     def mode(self) -> ControlMode:
-        return ControlMode.PAUSE
-
-    @property
-    def title(self) -> str:
-        return "Пауза"
-
-    @property
-    def algorithm(self) -> ControlAlgorithm:
-        return self._algorithm
-
-
-class TeleopSlamAlgorithm(SlamTeleoperationAlgorithm):
-    """Same control as teleop, but mode=TELEOP_SLAM for SLAM pipeline activation."""
-
-    @property
-    def mode(self) -> ControlMode:
-        return ControlMode.TELEOP_SLAM
-
-    @property
-    def name(self) -> str:
-        return "Телеуправление + SLAM"
-
-
-@dataclass
-class TeleoperationProfile(OperationProfile):
-    _algorithm: ControlAlgorithm = field(default_factory=SlamTeleoperationAlgorithm)
-
-    @property
-    def mode(self) -> ControlMode:
-        return ControlMode.TELEOPERATION
-
-    @property
-    def title(self) -> str:
-        return "Телеуправление"
-
-    @property
-    def algorithm(self) -> ControlAlgorithm:
-        return self._algorithm
-
-
-@dataclass
-class TeleopSlamProfile(OperationProfile):
-    _algorithm: ControlAlgorithm = field(default_factory=TeleopSlamAlgorithm)
-
-    @property
-    def mode(self) -> ControlMode:
-        return ControlMode.TELEOP_SLAM
-
-    @property
-    def title(self) -> str:
-        return "Телеуправление + SLAM"
-
-    @property
-    def algorithm(self) -> ControlAlgorithm:
-        return self._algorithm
-
-
-@dataclass
-class AutonomyProfile1(OperationProfile):
-    _algorithm: ControlAlgorithm = field(default_factory=PlaceholderAutonomyAlgorithm)
-
-    @property
-    def mode(self) -> ControlMode:
+        # Reuse existing autonomy slot until dedicated enum is introduced.
         return ControlMode.AUTONOMY_PROFILE_1
 
     @property
     def title(self) -> str:
-        return "Самоуправление: профиль 1"
+        return "Следование за человеком (скелет)"
 
-    @property
-    def algorithm(self) -> ControlAlgorithm:
-        return self._algorithm
+    def on_activate(self, context: AlgorithmContext) -> None:
+        del context
+        self._state = "searching"
+
+    def on_deactivate(self, context: AlgorithmContext) -> None:
+        del context
+        self._state = "idle"
+        self._target_id = None
+        self._last_target_pose = None
+
+    def on_action(self, action: dict) -> None:
+        action_type = str(action.get("type", ""))
+        if action_type == "cancel_follow":
+            self._target_id = None
+            self._state = "searching"
+        elif action_type == "set_target_id":
+            target = action.get("target_id")
+            self._target_id = str(target) if target is not None else None
+            self._state = "tracking" if self._target_id else "searching"
+
+    def tick(self, context: AlgorithmContext, input_state: InputState) -> ControlCommand:
+        del context
+        # TODO(architecture): run detector (YOLO pose / face) on input_state.camera_frame.
+        # TODO(architecture): compare face embedding against friend DB.
+        # TODO(architecture): estimate person 2D point from lidar + average height.
+        # TODO(architecture): drive robot toward target while centering face in camera.
+        # TODO(architecture): stop when distance <= approach_distance_m
+        #                    OR head_tilt reaches max_head_tilt_deg.
+        # Expected dependencies:
+        #   - vision service (detector + face embedder),
+        #   - target tracker state machine,
+        #   - planner/controller for (x,y) target in robot frame,
+        #   - persistence via save_state/restore_state.
+        # InputState may contain unrelated fields; profile ignores what it doesn't need.
+        if not input_state.camera_frame:
+            self._state = "searching"
+        self._debug = {
+            "manual_tracking_enabled": bool(input_state.manual.tracking_enabled),
+            "slam_pose_available": input_state.slam_pose is not None,
+            "lidar_available": input_state.lidar_scan is not None,
+        }
+        return ControlCommand(mode=self.mode)
+
+    def get_ui_state(self) -> dict:
+        return {
+            "follow_state": self._state,
+            "target_id": self._target_id,
+            "last_target_pose": self._last_target_pose,
+            "follow_debug": dict(self._debug),
+        }
+
+    def save_state(self) -> dict:
+        return {
+            "state": self._state,
+            "target_id": self._target_id,
+            "last_target_pose": self._last_target_pose,
+        }
+
+    def restore_state(self, state: dict) -> None:
+        self._state = str(state.get("state", "idle"))
+        target_id = state.get("target_id")
+        self._target_id = str(target_id) if target_id else None
+        pose = state.get("last_target_pose")
+        if (
+            isinstance(pose, (list, tuple))
+            and len(pose) == 2
+        ):
+            self._last_target_pose = (float(pose[0]), float(pose[1]))

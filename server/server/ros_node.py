@@ -15,6 +15,7 @@ class Ros2ServerBridge:
         robot_client=None,
         odom_confidence_threshold: float = 0.5,
         get_control_mode=None,
+        is_slam_active=None,
     ) -> None:
         self._enabled = False
         self._node = None
@@ -22,6 +23,7 @@ class Ros2ServerBridge:
         self._robot_client = robot_client
         self._odom_confidence_threshold = odom_confidence_threshold
         self._get_control_mode = get_control_mode
+        self._is_slam_active = is_slam_active
         self._scan_pub = None
         self._scan_timer = None
         self._spin_thread = None
@@ -85,15 +87,20 @@ class Ros2ServerBridge:
         """(x, y, yaw) for odom->base_link: from SLAM if odom_confidence < threshold, else from telemetry."""
         telem = self._robot_client.get_latest_telemetry()
         if (
-            self._slam_service
-            and telem.odom_confidence < self._odom_confidence_threshold
+            self._slam_service and 
+            telem.odom_confidence < self._odom_confidence_threshold
         ):
             x, y, theta = self._slam_service.get_pose()
             return (float(x), float(y), float(theta))
         return (float(telem.odom_x), float(telem.odom_y), float(telem.odom_yaw))
 
     def _is_teleop_slam(self) -> bool:
-        """True only when current mode is TELEOP_SLAM; otherwise False (do not feed slam_toolbox in pause/teleop)."""
+        """Whether SLAM feed should be active for current profile/mode."""
+        if self._is_slam_active is not None:
+            try:
+                return bool(self._is_slam_active())
+            except Exception:
+                return False
         if self._get_control_mode is None:
             return False
         try:
