@@ -1,13 +1,11 @@
 from __future__ import annotations
 
 import logging
-import os
 from time import sleep
 
 from flask import Flask, Response, jsonify, redirect, render_template, request, url_for
 
 from ..config import ServerConfig
-from ..models import ControlMode
 from ..services.controller_service import ControllerService
 from ..services.robot_client import RobotClient
 
@@ -21,15 +19,15 @@ def create_app(
     slam_service=None,
     ros_graph=None,
 ) -> Flask:
-    try:
-        from ament_index_python.packages import get_package_share_directory
-        _share = get_package_share_directory("server")
-        _share_templates = os.path.join(_share, "templates")
-        template_folder = _share_templates if os.path.exists(_share_templates) else "templates"
-    except Exception:
-        template_folder = "templates"
+    template_folder = "templates"
     app = Flask(__name__, template_folder=template_folder)
     LOGGER.info("Web app created | template_folder=%s", template_folder)
+
+    def _require_json() -> dict:
+        data = request.get_json(silent=False)
+        if not isinstance(data, dict):
+            raise ValueError("JSON body must be an object")
+        return data
 
     @app.get("/")
     def index():
@@ -86,8 +84,8 @@ def create_app(
 
     @app.post("/api/settings/ip")
     def set_robot_ip():
-        data = request.get_json(silent=True) or {}
-        ip = str(data.get("ip", "")).strip()
+        data = _require_json()
+        ip = str(data["ip"]).strip()
         if not ip:
             return jsonify({"success": False, "error": "IP не задан"}), 400
         robot_client.set_ip(ip)
@@ -103,8 +101,8 @@ def create_app(
 
     @app.post("/api/mode")
     def set_mode():
-        data = request.get_json(silent=True) or {}
-        mode_raw = str(data.get("mode", ControlMode.PAUSE.value))
+        data = _require_json()
+        mode_raw = str(data["mode"])
         try:
             mode = controller.set_mode(mode_raw)
             return jsonify({"success": True, "mode": mode.value})
@@ -114,8 +112,8 @@ def create_app(
 
     @app.post("/api/position")
     def set_position():
-        data = request.get_json(silent=True) or {}
-        controller.apply_mouse_delta(float(data.get("dx", 0.0)), float(data.get("dy", 0.0)))
+        data = _require_json()
+        controller.apply_mouse_delta(float(data["dx"]), float(data["dy"]))
         controller.tick_once()
         status = controller.get_ui_status()
         return jsonify({"success": True, "x": status["x"], "y": status["y"]})
@@ -132,26 +130,26 @@ def create_app(
 
     @app.post("/api/tracking")
     def set_tracking():
-        data = request.get_json(silent=True) or {}
-        tracking = bool(data.get("tracking", False))
+        data = _require_json()
+        tracking = bool(data["tracking"])
         controller.set_tracking(tracking)
         controller.tick_once()
         return jsonify({"success": True, "tracking": tracking})
 
     @app.post("/api/keyboard")
     def handle_keyboard():
-        data = request.get_json(silent=True) or {}
-        key = str(data.get("key", "")).lower()
-        state = bool(data.get("state", False))
+        data = _require_json()
+        key = str(data["key"]).lower()
+        state = bool(data["state"])
         controller.apply_keyboard(key, state)
         controller.tick_once()
         return jsonify({"success": True, "key": key, "state": state})
 
     @app.post("/api/car/control")
     def car_control():
-        data = request.get_json(silent=True) or {}
-        speed = float(data.get("speed", 0.0))
-        steering = float(data.get("steering", 0.0))
+        data = _require_json()
+        speed = float(data["speed"])
+        steering = float(data["steering"])
         controller.set_tracking(True)
         controller.apply_keyboard("w", speed > 0.0)
         controller.apply_keyboard("s", speed < 0.0)
@@ -213,11 +211,11 @@ def create_app(
             return jsonify({"success": False})
         x, y, theta = slam_service.get_pose()
         meta = slam_service.get_map_meta()
-        cmd = controller.get_ui_status().get("command", {})
+        cmd = controller.get_ui_status()["command"]
         return jsonify({
             "success": True,
             "x": x, "y": y, "theta": theta,
-            "head_pan_deg": cmd.get("head_pan_deg", 0.0),
+            "head_pan_deg": cmd["head_pan_deg"],
             "map_meta": {
                 "resolution": meta.resolution,
                 "origin_x": meta.origin_x,
@@ -249,14 +247,10 @@ def create_app(
         scan = robot_client.get_latest_lidar_scan()
         if scan is None:
             return jsonify({"success": False, "scan": None})
-        invert_angle = False
-        try:
-            cfg = robot_client.get_robot_config()
-            if cfg:
-                lidar_cfg = (cfg.get("sensors") or {}).get("lidar") or {}
-                invert_angle = bool(lidar_cfg.get("invert_angle", False))
-        except Exception:
-            invert_angle = False
+        cfg = robot_client.get_robot_config()
+        if cfg is None:
+            raise ValueError("robot_config is required for lidar endpoint")
+        invert_angle = bool(cfg["sensors"]["lidar"]["invert_angle"])
         return jsonify({"success": True, "scan": _scan_for_json(scan), "invert_angle": invert_angle})
 
     return app

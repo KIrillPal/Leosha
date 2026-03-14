@@ -59,6 +59,23 @@ _CLIENT_MODE_TO_SERVER = {
 }
 
 
+_REQUIRED_ROBOT_CONFIG = {
+    "robot_geometry": {
+        "head": {
+            "neck_min_deg": -70.0,
+            "neck_max_deg": 70.0,
+            "face_min_deg": -45.0,
+            "face_max_deg": 45.0,
+        }
+    },
+    "sensors": {
+        "lidar": {
+            "invert_angle": False,
+        }
+    },
+}
+
+
 def _server_mode_to_client_str(mode: ControlMode) -> str:
     return mode.value
 
@@ -118,7 +135,7 @@ class ZmqRobotClient:
         self._telemetry = TelemetryFrame(frame_jpeg=self._BLACK_FRAME)
         self._latest_frame: bytes = self._BLACK_FRAME
         self._latest_lidar_scan: dict | None = None
-        self._robot_config: dict | None = None
+        self._robot_config: dict | None = dict(_REQUIRED_ROBOT_CONFIG)
         self._counters = _Counters()
         self._avg_parts: dict[str, float] = {"lidar": 0.0, "imu": 0.0, "config": 0.0, "camera": 0.0}
         self._avg_parts_alpha = 0.15
@@ -214,10 +231,7 @@ class ZmqRobotClient:
         self._stop.set()
         self._recv_thread.join(timeout=2.0)
         for sock in (self._telemetry_sub, self._command_pub, self._report_sub):
-            try:
-                sock.close(linger=0)
-            except Exception:
-                pass
+            sock.close(linger=0)
         LOGGER.info("ZmqRobotClient stopped")
 
     # -- internal -----------------------------------------------------------
@@ -242,20 +256,15 @@ class ZmqRobotClient:
                         self._handle_telemetry(parts[0], parts[1])
                 except self._zmq.Again:
                     pass
-                except Exception as exc:
-                    LOGGER.warning("Telemetry recv error: %s", exc)
 
             if self._report_sub in events:
-                try:
-                    raw = self._report_sub.recv(flags=self._zmq.NOBLOCK)
-                    report = msgpack.unpackb(raw, raw=False)
-                    self._report_total += 1
-                    LOGGER.warning(
-                        "Client reports missing packets (#%d) | elapsed_ms=%.1f",
-                        self._report_total, report.get("elapsed_ms", 0),
-                    )
-                except Exception:
-                    pass
+                raw = self._report_sub.recv(flags=self._zmq.NOBLOCK)
+                report = msgpack.unpackb(raw, raw=False)
+                self._report_total += 1
+                LOGGER.warning(
+                    "Client reports missing packets (#%d) | elapsed_ms=%.1f",
+                    self._report_total, float(report["elapsed_ms"]),
+                )
 
             now = monotonic()
             with self._lock:
@@ -274,36 +283,36 @@ class ZmqRobotClient:
         now = monotonic()
         header = msgpack.unpackb(header_raw, raw=False)
 
-        odom = header.get("odometry", {})
-        pose = odom.get("pose", {})
-        vel = odom.get("velocity", {})
-        imu_readings = header.get("imu_readings", [])
+        odom = header["odometry"]
+        pose = odom["pose"]
+        vel = odom["velocity"]
+        imu_readings = header["imu_readings"]
         imu_yaw_rate = imu_readings[-1]["gyro_z"] if imu_readings else 0.0
 
         with self._lock:
             self._telemetry.timestamp = now
-            self._telemetry.timestamp_ns = int(header.get("timestamp_ns", 0))
-            self._telemetry.odom_x = float(pose.get("x", 0.0))
-            self._telemetry.odom_y = float(pose.get("y", 0.0))
-            self._telemetry.odom_yaw = float(pose.get("theta", 0.0))
-            self._telemetry.odom_confidence = float(header.get("odom_confidence", 0.0))
-            self._telemetry.speed_mps = float(vel.get("linear", 0.0))
-            self._telemetry.steering_rad = float(odom.get("steering_angle", 0.0))
+            self._telemetry.timestamp_ns = int(header["timestamp_ns"])
+            self._telemetry.odom_x = float(pose["x"])
+            self._telemetry.odom_y = float(pose["y"])
+            self._telemetry.odom_yaw = float(pose["theta"])
+            self._telemetry.odom_confidence = float(header["odom_confidence"])
+            self._telemetry.speed_mps = float(vel["linear"])
+            self._telemetry.steering_rad = float(odom["steering_angle"])
             self._telemetry.imu_yaw_rate = float(imu_yaw_rate)
             self._telemetry.frame_jpeg = frame_jpeg
             self._latest_frame = frame_jpeg
             self._telemetry.last_imu = imu_readings[-1] if imu_readings else None
-            scan = header.get("scan")
+            scan = header["scan"]
             if isinstance(scan, dict):
                 scan_dict = {
-                    "timestamp_ns": int(scan.get("timestamp_ns", 0)),
-                    "angle_min": float(scan.get("angle_min", 0.0)),
-                    "angle_max": float(scan.get("angle_max", 0.0)),
-                    "angle_increment": float(scan.get("angle_increment", 0.0)),
-                    "range_min": float(scan.get("range_min", 0.0)),
-                    "range_max": float(scan.get("range_max", 0.0)),
-                    "ranges": list(scan.get("ranges", [])),
-                    "intensities": list(scan.get("intensities", [])),
+                    "timestamp_ns": int(scan["timestamp_ns"]),
+                    "angle_min": float(scan["angle_min"]),
+                    "angle_max": float(scan["angle_max"]),
+                    "angle_increment": float(scan["angle_increment"]),
+                    "range_min": float(scan["range_min"]),
+                    "range_max": float(scan["range_max"]),
+                    "ranges": list(scan["ranges"]),
+                    "intensities": list(scan["intensities"]),
                 }
                 self._latest_lidar_scan = scan_dict
                 self._telemetry.last_scan = scan_dict
@@ -319,13 +328,13 @@ class ZmqRobotClient:
             self._connected = True
             self._last_ping_ms = elapsed_ms
             self._network.latency_ms = elapsed_ms
-            self._network.rssi_dbm = float(header.get("wifi_rssi_dbm", -50.0))
+            self._network.rssi_dbm = float(header["wifi_rssi_dbm"])
             if "robot_config" in header and isinstance(header["robot_config"], dict):
                 self._robot_config = header["robot_config"]
-            parts = header.get("parts_bytes")
+            parts = header["parts_bytes"]
             if isinstance(parts, dict):
                 for key in self._avg_parts:
-                    new_val = float(parts.get(key, 0))
+                    new_val = float(parts[key])
                     self._avg_parts[key] = (1.0 - self._avg_parts_alpha) * self._avg_parts[key] + self._avg_parts_alpha * new_val
 
         rx = self._rx_total
@@ -364,6 +373,7 @@ class MockRobotClient:
         self._status = RobotConnectionStatus(ip=ip, connected=True, last_ping_ms=1.2)
         self._last_command = ControlCommand()
         self._telemetry = TelemetryFrame(frame_jpeg=self._FRAME_JPEG, odom_confidence=1.0)
+        self._robot_config = dict(_REQUIRED_ROBOT_CONFIG)
         self._lock = threading.Lock()
         self._stop = threading.Event()
         self._counters = _Counters()
@@ -410,7 +420,7 @@ class MockRobotClient:
         return None
 
     def get_robot_config(self) -> dict | None:
-        return None
+        return dict(self._robot_config)
 
     def get_avg_packet_parts(self) -> dict[str, float]:
         return {"lidar": 0.0, "imu": 0.0, "config": 0.0, "camera": 0.0}

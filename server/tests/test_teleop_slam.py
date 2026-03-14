@@ -17,13 +17,23 @@ def _configs_dir() -> Path:
     return Path(__file__).resolve().parents[2] / "configs"
 
 
+def _profiles_cfg(cfg):
+    return {
+        "pause": cfg.profiles.pause,
+        "teleoperation": cfg.profiles.teleoperation,
+        "teleop_slam": cfg.profiles.teleop_slam,
+        "autonomy_profile_1": cfg.profiles.autonomy_profile_1,
+        "following": cfg.profiles.following,
+    }
+
+
 def test_teleop_slam_mode_available():
     """TELEOP_SLAM mode is registered and switchable."""
     cfg = load_server_config(str(_configs_dir() / "server.yaml"))
     robot = MockRobotClient(ip=cfg.robot.ip)
     context = AlgorithmContext(head_sensitivity=cfg.control.head_sensitivity)
     slam = SlamService(robot)
-    controller = ControllerService(robot, context=context, slam_service=slam)
+    controller = ControllerService(robot, context=context, slam_service=slam, profiles_config=_profiles_cfg(cfg))
     assert ControlMode.TELEOP_SLAM in controller.modes
     controller.set_mode("teleop_slam")
     assert controller.active_mode == ControlMode.TELEOP_SLAM
@@ -35,7 +45,7 @@ def test_teleop_slam_tick_calls_slam_update():
     robot = MockRobotClient(ip=cfg.robot.ip)
     context = AlgorithmContext(head_sensitivity=cfg.control.head_sensitivity)
     slam = SlamService(robot)
-    controller = ControllerService(robot, context=context, slam_service=slam)
+    controller = ControllerService(robot, context=context, slam_service=slam, profiles_config=_profiles_cfg(cfg))
     controller.set_mode("teleop_slam")
     controller.tick_once()
     stats = slam.get_stats()

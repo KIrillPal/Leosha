@@ -87,13 +87,13 @@ class RosGraphService:
                 # ros2 node list returns /node_name
                 clean = name.lstrip("/") if name.startswith("/") else name
                 seen.add(clean)
-                info = NODE_REGISTRY.get(clean, {"description": "ROS2 нода", "topic": None})
+                info = NODE_REGISTRY[clean] if clean in NODE_REGISTRY else {"description": "ROS2 нода", "topic": None}
                 fps = self._node_fps.get(clean, 0.0)
                 graph.append(NodeInfo(
                     name=clean,
                     status="running",
                     fps=fps,
-                    description=info.get("description", "—"),
+                    description=str(info["description"]),
                     last_seen=now,
                 ))
             # Add registry nodes not in list (stopped/not launched)
@@ -103,7 +103,7 @@ class RosGraphService:
                         name=reg_name,
                         status="stopped",
                         fps=0.0,
-                        description=reg_info.get("description", "—"),
+                        description=str(reg_info["description"]),
                     ))
             self._last_graph = graph
             return [self._node_to_dict(n) for n in graph]
@@ -125,7 +125,7 @@ class RosGraphService:
                     name=name,
                     status="stopped",
                     fps=self._node_fps.get(name, 0.0),
-                    description=info.get("description", "—"),
+                    description=str(info["description"]),
                 )
                 for name, info in NODE_REGISTRY.items()
             ]

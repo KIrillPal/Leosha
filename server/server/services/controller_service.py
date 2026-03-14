@@ -36,7 +36,9 @@ class ControllerService:
         self._context = context
         self._slam_service = slam_service
         self._state_file = Path(state_file) if state_file else None
-        self._profiles = self._build_profiles(profiles_config or {})
+        if profiles_config is None:
+            raise ValueError("profiles_config is required")
+        self._profiles = self._build_profiles(profiles_config)
         self._active_mode = ControlMode.PAUSE
         self._manual = ManualInputState()
         self._last_telemetry = TelemetryFrame()
@@ -51,15 +53,19 @@ class ControllerService:
 
     def _build_profiles(self, profiles_config: dict[str, dict]) -> dict[ControlMode, OperationProfile]:
         """Hardcoded profile classes + per-profile config from YAML."""
-        teleop_cfg = dict(profiles_config.get("teleoperation") or {})
-        teleop_slam_cfg = dict(profiles_config.get("teleop_slam") or {})
-        autonomy_cfg = dict(profiles_config.get("autonomy_profile_1") or {})
+        teleop_cfg = dict(profiles_config["teleoperation"])
+        teleop_slam_cfg = dict(profiles_config["teleop_slam"])
+        autonomy_cfg = dict(profiles_config["autonomy_profile_1"])
         # Following skeleton can be configured but intentionally not mounted as active
         # control mode yet (shares autonomy slot in current protocol).
-        self._following_profile = FollowingProfile(**dict(profiles_config.get("following") or {}))
+        self._following_profile = FollowingProfile(**dict(profiles_config["following"]))
         return {
             ControlMode.PAUSE: PauseProfile(),
-            ControlMode.TELEOPERATION: TeleoperationProfile(**teleop_cfg),
+            ControlMode.TELEOPERATION: TeleoperationProfile(
+                title="Телеуправление",
+                control_mode=ControlMode.TELEOPERATION,
+                **teleop_cfg,
+            ),
             ControlMode.TELEOP_SLAM: TeleopSlamProfile(**teleop_slam_cfg),
             ControlMode.AUTONOMY_PROFILE_1: AutonomyProfile1(**autonomy_cfg),
         }
@@ -85,51 +91,49 @@ class ControllerService:
     def _restore_mode_from_state(self) -> None:
         if not self._state_file or not self._state_file.exists():
             return
-        try:
-            with self._state_file.open("r", encoding="utf-8") as f:
-                data = yaml.safe_load(f) or {}
-            mode_raw = data.get("active_mode", data.get("mode"))
-            if mode_raw and mode_raw in [m.value for m in ControlMode]:
-                self._active_mode = ControlMode(mode_raw)
-                LOGGER.info("Restored control mode from state: %s", mode_raw)
-        except Exception as e:
-            LOGGER.debug("Could not restore mode from %s: %s", self._state_file, e)
+        with self._state_file.open("r", encoding="utf-8") as f:
+            data = yaml.safe_load(f)
+        if not isinstance(data, dict):
+            raise ValueError(f"Invalid state file {self._state_file}: expected mapping")
+        mode_raw = data["active_mode"]
+        if mode_raw not in [m.value for m in ControlMode]:
+            raise ValueError(f"Invalid active mode in state file: {mode_raw}")
+        self._active_mode = ControlMode(mode_raw)
+        LOGGER.info("Restored control mode from state: %s", mode_raw)
 
     def _restore_profiles_state(self) -> None:
         if not self._state_file or not self._state_file.exists():
             return
-        try:
-            with self._state_file.open("r", encoding="utf-8") as f:
-                data = yaml.safe_load(f) or {}
-            profile_states = data.get("profile_states") or {}
-            if not isinstance(profile_states, dict):
-                return
-            for mode, profile in self._profiles.items():
-                state = profile_states.get(mode.value)
-                if isinstance(state, dict):
-                    profile.restore_state(state)
-        except Exception as e:
-            LOGGER.debug("Could not restore profile states from %s: %s", self._state_file, e)
+        with self._state_file.open("r", encoding="utf-8") as f:
+            data = yaml.safe_load(f)
+        if not isinstance(data, dict):
+            raise ValueError(f"Invalid state file {self._state_file}: expected mapping")
+        profile_states = data["profile_states"]
+        if not isinstance(profile_states, dict):
+            raise ValueError(f"Invalid profile_states in state file {self._state_file}")
+        for mode, profile in self._profiles.items():
+            state = profile_states.get(mode.value)
+            if state is not None:
+                if not isinstance(state, dict):
+                    raise ValueError(f"Profile state for {mode.value} must be mapping")
+                profile.restore_state(state)
 
     def _save_state(self) -> None:
         if not self._state_file:
             return
-        try:
-            self._state_file.parent.mkdir(parents=True, exist_ok=True)
-            with self._state_file.open("w", encoding="utf-8") as f:
-                yaml.safe_dump(
-                    {
-                        "active_mode": self._active_mode.value,
-                        "profile_states": {
-                            mode.value: profile.save_state()
-                            for mode, profile in self._profiles.items()
-                        },
+        self._state_file.parent.mkdir(parents=True, exist_ok=True)
+        with self._state_file.open("w", encoding="utf-8") as f:
+            yaml.safe_dump(
+                {
+                    "active_mode": self._active_mode.value,
+                    "profile_states": {
+                        mode.value: profile.save_state()
+                        for mode, profile in self._profiles.items()
                     },
-                    f,
-                    allow_unicode=True,
-                )
-        except Exception as e:
-            LOGGER.warning("Could not save mode to %s: %s", self._state_file, e)
+                },
+                f,
+                allow_unicode=True,
+            )
 
     def set_mode(self, mode_raw: str) -> ControlMode:
         mode = ControlMode(mode_raw)
@@ -167,24 +171,21 @@ class ControllerService:
             self._pending_actions.append(dict(action))
 
     def _command_status(self, robot_config: dict | None) -> dict:
+        if robot_config is None:
+            raise ValueError("robot_config is required for command status")
         c = self._last_command
-        head = None
-        if robot_config:
-            head = (robot_config.get("robot_geometry") or {}).get("head") or robot_config.get("head")
-        if head is not None and isinstance(head, dict):
-            pan_deg = _head_axis_to_deg(
-                c.head_pan,
-                float(head.get("neck_min_deg", -70.0)),
-                float(head.get("neck_max_deg", 70.0)),
-            )
-            tilt_deg = _head_axis_to_deg(
-                c.head_tilt,
-                float(head.get("face_min_deg", -45.0)),
-                float(head.get("face_max_deg", 45.0)),
-            )
-        else:
-            pan_deg = float(c.head_pan) * 60.0
-            tilt_deg = float(c.head_tilt) * 45.0
+        robot_geometry = robot_config["robot_geometry"]
+        head = robot_geometry["head"]
+        pan_deg = _head_axis_to_deg(
+            c.head_pan,
+            float(head["neck_min_deg"]),
+            float(head["neck_max_deg"]),
+        )
+        tilt_deg = _head_axis_to_deg(
+            c.head_tilt,
+            float(head["face_min_deg"]),
+            float(head["face_max_deg"]),
+        )
         return {
             "speed": float(c.speed),
             "steering": float(c.steering),
@@ -199,8 +200,8 @@ class ControllerService:
         ui_state = self.active_profile.get_ui_state()
         with self._lock:
             return {
-                "x": float(ui_state.get("x", 0.0)),
-                "y": float(ui_state.get("y", 0.0)),
+                "x": float(ui_state["x"]),
+                "y": float(ui_state["y"]),
                 "tracking_enabled": self._manual.tracking_enabled,
                 "key_states": {
                     "w": self._manual.w,

@@ -120,68 +120,58 @@ class SlamService:
         """Periodic TF lookup: map → base_footprint for SLAM pose."""
         if self._tf_buffer is None:
             return
-        try:
-            from rclpy.time import Time
-            tf = self._tf_buffer.lookup_transform("map", "base_footprint", Time())
-            t = tf.transform.translation
-            r = tf.transform.rotation
-            siny_cosp = 2.0 * (r.w * r.z + r.x * r.y)
-            cosy_cosp = 1.0 - 2.0 * (r.y * r.y + r.z * r.z)
-            theta = math.atan2(siny_cosp, cosy_cosp)
-            self.update_pose(float(t.x), float(t.y), theta)
-        except Exception:
-            pass
+        from rclpy.time import Time
+        tf = self._tf_buffer.lookup_transform("map", "base_footprint", Time())
+        t = tf.transform.translation
+        r = tf.transform.rotation
+        siny_cosp = 2.0 * (r.w * r.z + r.x * r.y)
+        cosy_cosp = 1.0 - 2.0 * (r.y * r.y + r.z * r.z)
+        theta = math.atan2(siny_cosp, cosy_cosp)
+        self.update_pose(float(t.x), float(t.y), theta)
 
     def try_subscribe_ros(self, node) -> bool:
         """Subscribe to /map and set up TF listener for pose. Returns True if subscribed."""
-        try:
-            from nav_msgs.msg import OccupancyGrid
-            from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, DurabilityPolicy
-            from tf2_ros import Buffer, TransformListener
+        from nav_msgs.msg import OccupancyGrid
+        from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, DurabilityPolicy
+        from tf2_ros import Buffer, TransformListener
 
-            map_qos = QoSProfile(
-                reliability=ReliabilityPolicy.RELIABLE,
-                history=HistoryPolicy.KEEP_LAST,
-                depth=1,
-                durability=DurabilityPolicy.TRANSIENT_LOCAL,
+        map_qos = QoSProfile(
+            reliability=ReliabilityPolicy.RELIABLE,
+            history=HistoryPolicy.KEEP_LAST,
+            depth=1,
+            durability=DurabilityPolicy.TRANSIENT_LOCAL,
+        )
+
+        self._tf_buffer = Buffer()
+        self._tf_listener = TransformListener(self._tf_buffer, node)
+
+        def on_map(msg: OccupancyGrid) -> None:
+            import numpy as np
+            from PIL import Image
+            w, h = msg.info.width, msg.info.height
+            if w <= 0 or h <= 0:
+                return
+            meta = MapMeta(
+                resolution=float(msg.info.resolution),
+                origin_x=float(msg.info.origin.position.x),
+                origin_y=float(msg.info.origin.position.y),
+                width=w,
+                height=h,
             )
+            arr = np.array(msg.data, dtype=np.int8).reshape((h, w))
+            img_arr = np.zeros((h, w, 3), dtype=np.uint8)
+            img_arr[arr == -1] = [128, 128, 128]
+            img_arr[arr == 0] = [255, 255, 255]
+            img_arr[arr == 100] = [0, 0, 0]
+            img = Image.fromarray(np.flipud(img_arr), mode="RGB")
+            buf = io.BytesIO()
+            img.save(buf, format="PNG")
+            self.update_map(buf.getvalue(), meta)
 
-            self._tf_buffer = Buffer()
-            self._tf_listener = TransformListener(self._tf_buffer, node)
+        node.create_subscription(OccupancyGrid, "/map", on_map, map_qos)
+        node.create_timer(0.2, self._tf_lookup_pose)  # 5 Hz TF lookup
 
-            def on_map(msg: OccupancyGrid) -> None:
-                try:
-                    import numpy as np
-                    from PIL import Image
-                    w, h = msg.info.width, msg.info.height
-                    if w <= 0 or h <= 0:
-                        return
-                    meta = MapMeta(
-                        resolution=float(msg.info.resolution),
-                        origin_x=float(msg.info.origin.position.x),
-                        origin_y=float(msg.info.origin.position.y),
-                        width=w,
-                        height=h,
-                    )
-                    arr = np.array(msg.data, dtype=np.int8).reshape((h, w))
-                    img_arr = np.zeros((h, w, 3), dtype=np.uint8)
-                    img_arr[arr == -1] = [128, 128, 128]
-                    img_arr[arr == 0] = [255, 255, 255]
-                    img_arr[arr == 100] = [0, 0, 0]
-                    img = Image.fromarray(np.flipud(img_arr), mode="RGB")
-                    buf = io.BytesIO()
-                    img.save(buf, format="PNG")
-                    self.update_map(buf.getvalue(), meta)
-                except Exception as e:
-                    LOGGER.debug("Map conversion error: %s", e)
-
-            node.create_subscription(OccupancyGrid, "/map", on_map, map_qos)
-            node.create_timer(0.2, self._tf_lookup_pose)  # 5 Hz TF lookup
-
-            self._ros_subscribers.append("map")
-            self._ros_subscribers.append("tf_pose")
-            LOGGER.info("SLAM service: subscribed /map (RELIABLE+TRANSIENT_LOCAL), TF listener for pose")
-            return True
-        except Exception as e:
-            LOGGER.debug("SLAM ROS subscribe failed (slam_toolbox may not be running): %s", e)
-            return False
+        self._ros_subscribers.append("map")
+        self._ros_subscribers.append("tf_pose")
+        LOGGER.info("SLAM service: subscribed /map (RELIABLE+TRANSIENT_LOCAL), TF listener for pose")
+        return True

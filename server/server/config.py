@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -17,7 +17,7 @@ class AppSection:
 @dataclass
 class RobotSection:
     ip: str
-    backend: str = "mock"
+    backend: str
 
 
 @dataclass
@@ -33,29 +33,29 @@ class ProfilesSection:
     dedicated YAML subsection for tuning behavior.
     """
 
-    pause: dict[str, Any] = field(default_factory=dict)
-    teleoperation: dict[str, Any] = field(default_factory=dict)
-    teleop_slam: dict[str, Any] = field(default_factory=dict)
-    autonomy_profile_1: dict[str, Any] = field(default_factory=dict)
-    following: dict[str, Any] = field(default_factory=dict)
+    pause: dict[str, Any]
+    teleoperation: dict[str, Any]
+    teleop_slam: dict[str, Any]
+    autonomy_profile_1: dict[str, Any]
+    following: dict[str, Any]
 
 
 @dataclass
 class NetworkSection:
     grafana_url: str
-    bind_address: str = "0.0.0.0"
-    telemetry_port: int = 5550
-    command_port: int = 5552
-    report_port: int = 5553
-    recv_timeout_ms: int = 100
-    send_high_water_mark: int = 2
-    recv_high_water_mark: int = 1
+    bind_address: str
+    telemetry_port: int
+    command_port: int
+    report_port: int
+    recv_timeout_ms: int
+    send_high_water_mark: int
+    recv_high_water_mark: int
 
 
 @dataclass
 class SlamSection:
     """Порог уверенности в одометрии: если odom_confidence < порог, в TF идёт pose из slam_toolbox."""
-    odom_confidence_threshold: float = 0.5
+    odom_confidence_threshold: float
 
 
 @dataclass
@@ -64,8 +64,8 @@ class ServerConfig:
     robot: RobotSection
     control: ControlSection
     network: NetworkSection
-    profiles: ProfilesSection = field(default_factory=ProfilesSection)
-    slam: SlamSection = field(default_factory=SlamSection)
+    profiles: ProfilesSection
+    slam: SlamSection
 
 
 def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
@@ -97,17 +97,15 @@ def load_server_config(path: str | Path) -> ServerConfig:
         )
 
     with config_path.open("r", encoding="utf-8") as f:
-        data = yaml.safe_load(f) or {}
+        data = yaml.safe_load(f)
+    if not isinstance(data, dict):
+        raise ValueError(f"Config at {config_path} must be a non-empty YAML mapping")
 
-    slam_data = data.get("slam") or {}
-    slam = SlamSection(**slam_data) if slam_data else SlamSection()
-    profiles_data = data.get("profiles") or {}
-    profiles = ProfilesSection(**profiles_data) if profiles_data else ProfilesSection()
     return ServerConfig(
         app=AppSection(**data["app"]),
         robot=RobotSection(**data["robot"]),
         control=ControlSection(**data["control"]),
-        profiles=profiles,
+        profiles=ProfilesSection(**data["profiles"]),
         network=NetworkSection(**data["network"]),
-        slam=slam,
+        slam=SlamSection(**data["slam"]),
     )

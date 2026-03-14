@@ -32,13 +32,23 @@ def _configs_dir() -> Path:
     return Path(__file__).resolve().parents[2] / "configs"
 
 
+def _profiles_cfg(cfg):
+    return {
+        "pause": cfg.profiles.pause,
+        "teleoperation": cfg.profiles.teleoperation,
+        "teleop_slam": cfg.profiles.teleop_slam,
+        "autonomy_profile_1": cfg.profiles.autonomy_profile_1,
+        "following": cfg.profiles.following,
+    }
+
+
 @pytest.fixture()
 def runtime():
     cfg_path = _configs_dir() / "server.yaml"
     cfg = load_server_config(cfg_path)
     robot = MockRobotClient(ip=cfg.robot.ip)
     context = AlgorithmContext(head_sensitivity=cfg.control.head_sensitivity)
-    controller = ControllerService(robot, context=context)
+    controller = ControllerService(robot, context=context, profiles_config=_profiles_cfg(cfg))
     app = create_app(controller, robot, cfg)
     app.config.update(TESTING=True)
     yield app, controller, robot
@@ -61,7 +71,12 @@ def runtime_with_slam():
     context = AlgorithmContext(head_sensitivity=cfg.control.head_sensitivity)
     slam_service = SlamService(robot)
     ros_graph = RosGraphService()
-    controller = ControllerService(robot, context=context, slam_service=slam_service)
+    controller = ControllerService(
+        robot,
+        context=context,
+        slam_service=slam_service,
+        profiles_config=_profiles_cfg(cfg),
+    )
     app = create_app(controller, robot, cfg, slam_service=slam_service, ros_graph=ros_graph)
     app.config.update(TESTING=True)
     yield app, controller, robot, slam_service, ros_graph

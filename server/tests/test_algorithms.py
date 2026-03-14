@@ -13,7 +13,13 @@ def test_pause_profile_returns_zero_command():
 
 
 def test_teleoperation_profile_generates_forward_and_right_command():
-    profile = TeleoperationProfile()
+    profile = TeleoperationProfile(
+        forward_throttle=0.43,
+        backward_throttle=-0.33,
+        forward_fast_throttle=0.69,
+        title="Телеуправление",
+        control_mode=ControlMode.TELEOPERATION,
+    )
     manual = ManualInputState(tracking_enabled=True, w=True, d=True)
     telemetry = TelemetryFrame(imu_yaw_rate=0.2)
 

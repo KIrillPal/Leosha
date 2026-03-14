@@ -12,8 +12,14 @@ control:
 
 profiles:
   pause: {}
-  teleoperation: {}
-  teleop_slam: {}
+  teleoperation:
+    forward_throttle: 0.43
+    backward_throttle: -0.33
+    forward_fast_throttle: 0.69
+  teleop_slam:
+    forward_throttle: 0.43
+    backward_throttle: -0.33
+    forward_fast_throttle: 0.69
   autonomy_profile_1: {}
   following:
     friend_embeddings_db: "data/friends.db"

@@ -44,6 +44,9 @@ class PauseProfile(BaseControlProfile):
         del context, input_state
         return ControlCommand(mode=self.mode)
 
+    def get_ui_state(self) -> dict:
+        return {"x": 0.0, "y": 0.0}
+
 
 class TeleoperationProfile(BaseControlProfile):
     """Teleoperation profile: consumes ManualInputState and produces driving command."""
@@ -51,9 +54,15 @@ class TeleoperationProfile(BaseControlProfile):
     def __init__(
         self,
         *,
-        title: str = "Телеуправление",
-        control_mode: ControlMode = ControlMode.TELEOPERATION,
+        forward_throttle: float,
+        backward_throttle: float,
+        forward_fast_throttle: float,
+        title: str,
+        control_mode: ControlMode,
     ) -> None:
+        self._forward_throttle = float(forward_throttle)
+        self._backward_throttle = float(backward_throttle)
+        self._forward_fast_throttle = float(forward_fast_throttle)
         self._title = title
         self._control_mode = control_mode
         self._head_pan = 0.0
@@ -75,18 +84,12 @@ class TeleoperationProfile(BaseControlProfile):
         if not manual.tracking_enabled:
             return ControlCommand(mode=self.mode, head_pan=self._head_pan, head_tilt=self._head_tilt)
 
-        # Throttle из конфига клиента (actuators.motor); при отсутствии конфига — дефолты
-        motor = (robot_config or {}).get("actuators", {}).get("motor") or {}
-        forward = float(motor.get("forward_throttle", 0.43))
-        backward = float(motor.get("backward_throttle", -0.33))
-        forward_fast = float(motor.get("forward_fast_throttle", 0.69))
-
         speed = 0.0
         steering = 0.0
         if manual.w and not manual.s:
-            speed = forward_fast if manual.shift else forward
+            speed = self._forward_fast_throttle if manual.shift else self._forward_throttle
         elif manual.s and not manual.w:
-            speed = backward
+            speed = self._backward_throttle
         # Нормализованное руление ±1.0; клиент мапит в диапазон по actuators.wheel (min/max/zero)
         if manual.a and not manual.d:
             steering = -1.0
@@ -127,15 +130,27 @@ class TeleoperationProfile(BaseControlProfile):
         return {"head_pan": self._head_pan, "head_tilt": self._head_tilt}
 
     def restore_state(self, state: dict) -> None:
-        self._head_pan = float(state.get("head_pan", 0.0))
-        self._head_tilt = float(state.get("head_tilt", 0.0))
+        self._head_pan = float(state["head_pan"])
+        self._head_tilt = float(state["head_tilt"])
 
 
 class TeleopSlamProfile(TeleoperationProfile):
     """Same teleop behavior as TeleoperationProfile, but marks SLAM as required."""
 
-    def __init__(self, **_: dict) -> None:
-        super().__init__(title="Телеуправление + SLAM", control_mode=ControlMode.TELEOP_SLAM)
+    def __init__(
+        self,
+        *,
+        forward_throttle: float,
+        backward_throttle: float,
+        forward_fast_throttle: float,
+    ) -> None:
+        super().__init__(
+            forward_throttle=forward_throttle,
+            backward_throttle=backward_throttle,
+            forward_fast_throttle=forward_fast_throttle,
+            title="Телеуправление + SLAM",
+            control_mode=ControlMode.TELEOP_SLAM,
+        )
 
     @property
     def requires_slam(self) -> bool:
@@ -158,12 +173,15 @@ class AutonomyProfile1(BaseControlProfile):
         self._target = dict(target)
 
     def on_action(self, action: dict) -> None:
-        if action.get("type") == "set_target" and isinstance(action.get("target"), dict):
+        if action["type"] == "set_target" and isinstance(action["target"], dict):
             self.set_target(action["target"])
 
     def tick(self, context: AlgorithmContext, input_state: InputState) -> ControlCommand:
         del context, input_state
         return ControlCommand(mode=self.mode)
+
+    def get_ui_state(self) -> dict:
+        return {"x": 0.0, "y": 0.0}
 
 
 @dataclass
@@ -174,11 +192,11 @@ class FollowingProfile(BaseControlProfile):
     advanced behavior should be architected in this project.
     """
 
-    friend_embeddings_db: str = "data/friends.db"
-    approach_distance_m: float = 1.0
-    max_head_tilt_deg: float = 60.0
-    average_human_height_m: float = 1.7
-    yolo_model: str = "yolov8n.pt"
+    friend_embeddings_db: str
+    approach_distance_m: float
+    max_head_tilt_deg: float
+    average_human_height_m: float
+    yolo_model: str
 
     def __post_init__(self) -> None:
         self._state = "idle"  # idle/searching/tracking/approaching/reached/lost
@@ -206,12 +224,12 @@ class FollowingProfile(BaseControlProfile):
         self._last_target_pose = None
 
     def on_action(self, action: dict) -> None:
-        action_type = str(action.get("type", ""))
+        action_type = str(action["type"])
         if action_type == "cancel_follow":
             self._target_id = None
             self._state = "searching"
         elif action_type == "set_target_id":
-            target = action.get("target_id")
+            target = action["target_id"]
             self._target_id = str(target) if target is not None else None
             self._state = "tracking" if self._target_id else "searching"
 
@@ -240,6 +258,8 @@ class FollowingProfile(BaseControlProfile):
 
     def get_ui_state(self) -> dict:
         return {
+            "x": 0.0,
+            "y": 0.0,
             "follow_state": self._state,
             "target_id": self._target_id,
             "last_target_pose": self._last_target_pose,
@@ -254,10 +274,10 @@ class FollowingProfile(BaseControlProfile):
         }
 
     def restore_state(self, state: dict) -> None:
-        self._state = str(state.get("state", "idle"))
-        target_id = state.get("target_id")
+        self._state = str(state["state"])
+        target_id = state["target_id"]
         self._target_id = str(target_id) if target_id else None
-        pose = state.get("last_target_pose")
+        pose = state["last_target_pose"]
         if (
             isinstance(pose, (list, tuple))
             and len(pose) == 2
