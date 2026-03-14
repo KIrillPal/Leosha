@@ -95,6 +95,11 @@ class ControllerService:
             data = yaml.safe_load(f)
         if not isinstance(data, dict):
             raise ValueError(f"Invalid state file {self._state_file}: expected mapping")
+        if "active_mode" not in data:
+            raise ValueError(
+                f"State file {self._state_file} is in old format (missing 'active_mode'). "
+                "Remove it to start with default mode."
+            )
         mode_raw = data["active_mode"]
         if mode_raw not in [m.value for m in ControlMode]:
             raise ValueError(f"Invalid active mode in state file: {mode_raw}")
@@ -108,6 +113,11 @@ class ControllerService:
             data = yaml.safe_load(f)
         if not isinstance(data, dict):
             raise ValueError(f"Invalid state file {self._state_file}: expected mapping")
+        if "profile_states" not in data:
+            raise ValueError(
+                f"State file {self._state_file} is in old format (missing 'profile_states'). "
+                "Remove it to start with default state."
+            )
         profile_states = data["profile_states"]
         if not isinstance(profile_states, dict):
             raise ValueError(f"Invalid profile_states in state file {self._state_file}")

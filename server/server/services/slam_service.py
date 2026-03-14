@@ -117,17 +117,24 @@ class SlamService:
             return (self._state.pose_x, self._state.pose_y, self._state.pose_theta)
 
     def _tf_lookup_pose(self) -> None:
-        """Periodic TF lookup: map → base_footprint for SLAM pose."""
+        """Periodic TF lookup: map → base_footprint for SLAM pose.
+        Skips update when map frame is not in TF yet (slam_toolbox not ready).
+        """
         if self._tf_buffer is None:
             return
-        from rclpy.time import Time
-        tf = self._tf_buffer.lookup_transform("map", "base_footprint", Time())
-        t = tf.transform.translation
-        r = tf.transform.rotation
-        siny_cosp = 2.0 * (r.w * r.z + r.x * r.y)
-        cosy_cosp = 1.0 - 2.0 * (r.y * r.y + r.z * r.z)
-        theta = math.atan2(siny_cosp, cosy_cosp)
-        self.update_pose(float(t.x), float(t.y), theta)
+        try:
+            from rclpy.time import Time
+            tf = self._tf_buffer.lookup_transform("map", "base_footprint", Time())
+            t = tf.transform.translation
+            r = tf.transform.rotation
+            siny_cosp = 2.0 * (r.w * r.z + r.x * r.y)
+            cosy_cosp = 1.0 - 2.0 * (r.y * r.y + r.z * r.z)
+            theta = math.atan2(siny_cosp, cosy_cosp)
+            self.update_pose(float(t.x), float(t.y), theta)
+        except Exception as e:
+            # map frame not in TF yet (slam_toolbox has not published it), or other TF lookup failure
+            if "LookupException" not in type(e).__name__ and "Transform" not in type(e).__name__:
+                raise
 
     def try_subscribe_ros(self, node) -> bool:
         """Subscribe to /map and set up TF listener for pose. Returns True if subscribed."""
