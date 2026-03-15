@@ -64,6 +64,7 @@ setup(
         "msgpack>=1.0",
         "opencv-python>=4.5",
         "ultralytics>=8.0",
+        "openvino>=2024.0",
     ],
     extras_require={
         "test": [

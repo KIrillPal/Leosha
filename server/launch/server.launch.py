@@ -8,6 +8,8 @@ from launch_ros.actions import Node
 
 _VISION_REQUIRED_KEYS = (
     "yolo_model",
+    "yolo_device",
+    "yolo_conf",
     "yolo_imgsz",
     "tracker",
     "enable_face_embedding",

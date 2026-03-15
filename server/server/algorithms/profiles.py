@@ -238,7 +238,8 @@ class StaringProfile(BaseControlProfile):
             err_y = 0.0
         alpha = self._head_tracking_gain * max(0.0, dt)
         self._head_pan = max(-1.0, min(1.0, self._head_pan - err_x * alpha))
-        self._head_tilt = max(-1.0, min(1.0, self._head_tilt + err_y * alpha))
+        # err_y > 0 = target below center (image y down) -> tilt down (decrease tilt)
+        self._head_tilt = max(-1.0, min(1.0, self._head_tilt - err_y * alpha))
 
     def _manual_head(self, context: AlgorithmContext, manual: ManualInputState) -> None:
         self._head_pan = max(-1.0, min(1.0, self._head_pan + manual.head_dx * context.head_sensitivity))
