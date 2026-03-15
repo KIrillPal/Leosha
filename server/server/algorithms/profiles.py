@@ -285,31 +285,21 @@ class StaringProfile(BaseControlProfile):
     def tick(self, context: AlgorithmContext, input_state: InputState) -> ControlCommand:
         manual = input_state.manual
         telemetry = input_state.telemetry
-
-        if not manual.tracking_enabled:
-            self._staring_state = "manual"
-            self._staring_target = None
-            self._staring_track_id = None
-            self._staring_overlay = []
-            return ControlCommand(mode=self.mode, head_pan=self._head_pan, head_tilt=self._head_tilt)
-
         speed, steering = self._drive_command(manual, telemetry)
         persons = self._vision.get_persons()
 
+        overlay: list[dict] = []
         matches: list[tuple[dict, str]] = []
         match_by_track_id: dict[int, str] = {}
         for person in persons:
+            bbox = [float(v) for v in person["bbox"]]
+            x1, y1, x2, y2 = bbox
             embedding = person["face_embedding"]
             if isinstance(embedding, list) and embedding:
                 name = self._friend_db.match([float(v) for v in embedding], self._face_match_threshold)
                 if name is not None:
                     matches.append((person, name))
                     match_by_track_id[int(person["track_id"])] = name
-
-        overlay: list[dict] = []
-        for person in persons:
-            bbox = [float(v) for v in person["bbox"]]
-            x1, y1, x2, y2 = bbox
             overlay.append(
                 {
                     "track_id": int(person["track_id"]),
@@ -324,7 +314,11 @@ class StaringProfile(BaseControlProfile):
             )
         self._staring_overlay = overlay
 
-        if matches:
+        if not manual.tracking_enabled:
+            self._staring_state = "manual"
+            self._staring_target = None
+            self._staring_track_id = None
+        elif matches:
             target_person, target_name = max(matches, key=lambda item: self._bbox_area(item[0]["bbox"]))
             frame_w, frame_h = self._frame_size(input_state.camera_frame)
             self._track_head_by_bbox(target_person["bbox"], frame_w, frame_h, input_state.dt)

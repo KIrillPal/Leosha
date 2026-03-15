@@ -28,6 +28,7 @@ class VisionNode(Node):
         self.declare_parameter("yolo_model")
         self.declare_parameter("yolo_imgsz")
         self.declare_parameter("tracker")
+        self.declare_parameter("enable_face_embedding")
         self.declare_parameter("face_model")
         self.declare_parameter("embedding_interval")
         self.declare_parameter("face_min_confidence")
@@ -46,7 +47,14 @@ class VisionNode(Node):
         self._yolo_model = self._require_param("yolo_model", str)
         self._yolo_imgsz = self._require_param("yolo_imgsz", int)
         self._tracker = self._require_param("tracker", str)
-        self._face_model = self._require_param("face_model", str)
+        self._enable_face_embedding = self._require_param("enable_face_embedding", bool)
+        face_model_raw = self.get_parameter("face_model").value
+        if self._enable_face_embedding:
+            if face_model_raw is None or str(face_model_raw).strip() == "":
+                raise ValueError("Required ROS parameter 'face_model' must be set when enable_face_embedding=true")
+            self._face_model = str(face_model_raw)
+        else:
+            self._face_model = str(face_model_raw) if face_model_raw is not None else ""
         self._embedding_interval = self._require_param("embedding_interval", int)
         self._face_min_confidence = self._require_param("face_min_confidence", float)
         self._head_yaw_min_deg = self._require_param("head_yaw_min_deg", float)
@@ -84,23 +92,34 @@ class VisionNode(Node):
             raise ValueError(f"Required ROS parameter '{name}' is not set")
         if cast is str and str(value).strip() == "":
             raise ValueError(f"Required ROS parameter '{name}' must be non-empty")
+        if cast is bool:
+            if isinstance(value, bool):
+                return value
+            text = str(value).strip().lower()
+            if text in {"1", "true", "yes", "on"}:
+                return True
+            if text in {"0", "false", "no", "off"}:
+                return False
+            raise ValueError(f"Required ROS parameter '{name}' must be boolean")
         return cast(value)
 
     def _init_runtimes(self) -> None:
         import numpy as np
         import cv2
         from ultralytics import YOLO
-        import onnxruntime as ort
 
         self._np = np
         self._cv2 = cv2
         self._yolo = YOLO(self._yolo_model)
-        self._ort = ort
-        self._ort_session = ort.InferenceSession(
-            self._face_model,
-            providers=["CPUExecutionProvider"],
-        )
-        self._ort_input_name = self._ort_session.get_inputs()[0].name
+        if self._enable_face_embedding:
+            import onnxruntime as ort
+
+            self._ort = ort
+            self._ort_session = ort.InferenceSession(
+                self._face_model,
+                providers=["CPUExecutionProvider"],
+            )
+            self._ort_input_name = self._ort_session.get_inputs()[0].name
 
     def _on_frame(self, msg: CompressedImage) -> None:
         self._frame_id += 1
@@ -217,6 +236,8 @@ class VisionNode(Node):
         return max(self._head_yaw_min_deg, min(self._head_yaw_max_deg, yaw))
 
     def _compute_face_embedding(self, frame, track: dict) -> list[float]:
+        if not self._enable_face_embedding:
+            return []
         x1, y1, x2, y2 = [int(v) for v in track["bbox"]]
         h, w = frame.shape[:2]
         x1 = max(0, min(w - 1, x1))

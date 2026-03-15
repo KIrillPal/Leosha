@@ -98,6 +98,34 @@ def test_staring_profile_tracks_first_face_when_no_known_match(tmp_path):
     assert ui["staring_track_id"] == 11
 
 
+def test_staring_profile_wasd_works_when_tracking_disabled(tmp_path):
+    vision = MockVisionService()
+    profile = StaringProfile(
+        forward_throttle=0.3,
+        backward_throttle=-0.15,
+        forward_fast_throttle=0.5,
+        friend_embeddings_db=str(tmp_path / "friends.db"),
+        face_match_threshold=0.5,
+        head_tracking_gain=3.0,
+        head_tracking_deadzone=0.03,
+        vision_service=vision,
+    )
+    cmd = profile.tick(
+        AlgorithmContext(head_sensitivity=-0.002),
+        InputState(
+            manual=ManualInputState(tracking_enabled=False, w=True, d=True),
+            telemetry=TelemetryFrame(),
+            dt=0.1,
+        ),
+    )
+    ui = profile.get_ui_state()
+
+    assert cmd.speed > 0.0
+    assert cmd.steering > 0.0
+    assert ui["staring_state"] == "manual"
+    assert ui["staring_track_id"] is None
+
+
 def test_staring_profile_tracks_best_matching_face(tmp_path):
     vision = MockVisionService()
     profile = StaringProfile(
