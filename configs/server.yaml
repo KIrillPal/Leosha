@@ -27,6 +27,14 @@ profiles:
     max_head_tilt_deg: 60.0
     average_human_height_m: 1.7
     yolo_model: "yolov8n.pt"
+  staring:
+    forward_throttle: 0.3
+    backward_throttle: -0.15
+    forward_fast_throttle: 0.5
+    friend_embeddings_db: "data/friends.db"
+    face_match_threshold: 0.5
+    head_tracking_gain: 3.0
+    head_tracking_deadzone: 0.03
 
 network:
   grafana_url: ""

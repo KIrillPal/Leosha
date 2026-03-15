@@ -38,6 +38,7 @@ class ProfilesSection:
     teleop_slam: dict[str, Any]
     autonomy_profile_1: dict[str, Any]
     following: dict[str, Any]
+    staring: dict[str, Any]
 
 
 @dataclass

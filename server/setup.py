@@ -74,6 +74,6 @@ setup(
     description="ROS2 сервер управления роботом с YAML-конфигом, web GUI и mock-клиентом.",
     license="MIT",
     tests_require=["pytest"],
-    scripts=["scripts/server"],
+    scripts=["scripts/server", "scripts/vision_node"],
     cmdclass={"install_scripts": install_scripts_with_env_shebang},
 )

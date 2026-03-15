@@ -39,6 +39,7 @@ def _profiles_cfg(cfg):
         "teleop_slam": cfg.profiles.teleop_slam,
         "autonomy_profile_1": cfg.profiles.autonomy_profile_1,
         "following": cfg.profiles.following,
+        "staring": cfg.profiles.staring,
     }
 
 

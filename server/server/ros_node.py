@@ -12,6 +12,7 @@ class Ros2ServerBridge:
     def __init__(
         self,
         slam_service=None,
+        vision_service=None,
         robot_client=None,
         odom_confidence_threshold: float = 0.5,
         get_control_mode=None,
@@ -20,12 +21,15 @@ class Ros2ServerBridge:
         self._enabled = False
         self._node = None
         self._slam_service = slam_service
+        self._vision_service = vision_service
         self._robot_client = robot_client
         self._odom_confidence_threshold = odom_confidence_threshold
         self._get_control_mode = get_control_mode
         self._is_slam_active = is_slam_active
         self._scan_pub = None
         self._scan_timer = None
+        self._camera_pub = None
+        self._camera_timer = None
         self._spin_thread = None
         self._spin_stop = threading.Event()
 
@@ -38,8 +42,11 @@ class Ros2ServerBridge:
         if self._slam_service:
             self._slam_service.set_ros_enabled(True)
             self._slam_service.try_subscribe_ros(self._node)
+        if self._vision_service:
+            self._vision_service.try_subscribe_ros(self._node)
         if self._robot_client:
             self._start_scan_publisher()
+            self._start_camera_publisher()
         self._spin_stop.clear()
         self._spin_thread = threading.Thread(target=self._spin_loop, daemon=True)
         self._spin_thread.start()
@@ -74,6 +81,28 @@ class Ros2ServerBridge:
         self._scan_timer = self._node.create_timer(0.1, self._publish_scan)  # 10 Hz
         self._tf_timer = self._node.create_timer(0.02, self._publish_odom_tf)  # 50 Hz
         LOGGER.info("Scan publisher and TF (base_link->laser_frame, odom->base_link) started")
+
+    def _start_camera_publisher(self) -> None:
+        from sensor_msgs.msg import CompressedImage
+
+        self._camera_pub = self._node.create_publisher(CompressedImage, "/camera/image_raw", 10)
+        self._camera_timer = self._node.create_timer(1.0 / 30.0, self._publish_camera)  # 30 Hz
+        LOGGER.info("Camera publisher started on /camera/image_raw")
+
+    def _publish_camera(self) -> None:
+        if not self._robot_client or self._camera_pub is None:
+            return
+        frame = self._robot_client.get_latest_frame()
+        if not frame:
+            return
+        from sensor_msgs.msg import CompressedImage
+
+        msg = CompressedImage()
+        msg.header.stamp = self._node.get_clock().now().to_msg()
+        msg.header.frame_id = "camera"
+        msg.format = "jpeg"
+        msg.data = frame
+        self._camera_pub.publish(msg)
 
     def _get_odom_pose(self) -> tuple[float, float, float]:
         """(x, y, yaw) for odom->base_link: from SLAM if odom_confidence < threshold, else from telemetry."""

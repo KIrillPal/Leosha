@@ -145,6 +145,12 @@ def create_app(
         controller.tick_once()
         return jsonify({"success": True, "key": key, "state": state})
 
+    @app.post("/api/action")
+    def send_action():
+        data = _require_json()
+        controller.add_action(data)
+        return jsonify({"success": True})
+
     @app.post("/api/car/control")
     def car_control():
         data = _require_json()

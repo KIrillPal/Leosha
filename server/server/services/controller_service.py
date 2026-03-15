@@ -7,10 +7,18 @@ from time import monotonic, sleep
 
 import yaml
 
-from ..algorithms import AutonomyProfile1, FollowingProfile, PauseProfile, TeleoperationProfile, TeleopSlamProfile
+from ..algorithms import (
+    AutonomyProfile1,
+    FollowingProfile,
+    PauseProfile,
+    StaringProfile,
+    TeleoperationProfile,
+    TeleopSlamProfile,
+)
 from ..interfaces import AlgorithmContext, InputState, OperationProfile
 from ..models import ControlCommand, ControlMode, ManualInputState, TelemetryFrame
 from .robot_client import RobotClient
+from .vision_service import VisionService
 
 LOGGER = logging.getLogger(__name__)
 
@@ -29,12 +37,14 @@ class ControllerService:
         robot_client: RobotClient,
         context: AlgorithmContext,
         slam_service=None,
+        vision_service: VisionService | None = None,
         state_file: Path | str | None = None,
         profiles_config: dict[str, dict] | None = None,
     ) -> None:
         self._robot = robot_client
         self._context = context
         self._slam_service = slam_service
+        self._vision_service = vision_service if vision_service is not None else VisionService()
         self._state_file = Path(state_file) if state_file else None
         if profiles_config is None:
             raise ValueError("profiles_config is required")
@@ -56,6 +66,7 @@ class ControllerService:
         teleop_cfg = dict(profiles_config["teleoperation"])
         teleop_slam_cfg = dict(profiles_config["teleop_slam"])
         autonomy_cfg = dict(profiles_config["autonomy_profile_1"])
+        staring_cfg = dict(profiles_config["staring"])
         # Following skeleton can be configured but intentionally not mounted as active
         # control mode yet (shares autonomy slot in current protocol).
         self._following_profile = FollowingProfile(**dict(profiles_config["following"]))
@@ -68,6 +79,7 @@ class ControllerService:
             ),
             ControlMode.TELEOP_SLAM: TeleopSlamProfile(**teleop_slam_cfg),
             ControlMode.AUTONOMY_PROFILE_1: AutonomyProfile1(**autonomy_cfg),
+            ControlMode.STARING: StaringProfile(vision_service=self._vision_service, **staring_cfg),
         }
 
     @property

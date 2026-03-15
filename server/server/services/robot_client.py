@@ -56,6 +56,7 @@ _CLIENT_MODE_TO_SERVER = {
     "teleoperation": ControlMode.TELEOPERATION,
     "teleop_slam": ControlMode.TELEOP_SLAM,
     "autonomy_profile_1": ControlMode.AUTONOMY_PROFILE_1,
+    "staring": ControlMode.STARING,
 }
 
 

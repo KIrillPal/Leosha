@@ -1,0 +1,6 @@
+#!/usr/bin/env python3
+"""Entry point for ROS2 vision inference node."""
+from server.vision_node import main
+
+if __name__ == "__main__":
+    main()

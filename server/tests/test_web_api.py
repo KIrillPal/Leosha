@@ -47,3 +47,9 @@ def test_video_feed_mjpeg_boundary(client):
     assert response.status_code == 200
     first_chunk = next(response.response)
     assert b"--frame" in first_chunk
+
+
+def test_action_endpoint_accepts_profile_action(client):
+    resp = client.post("/api/action", json={"type": "list_faces"})
+    assert resp.status_code == 200
+    assert resp.get_json()["success"] is True

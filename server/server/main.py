@@ -9,6 +9,7 @@ from .interfaces import AlgorithmContext
 from .logging_setup import configure_pipeline_logging
 from .ros_node import Ros2ServerBridge
 from .services.controller_service import ControllerService
+from .services.vision_service import VisionService
 from .services.robot_client import MockRobotClient, ZmqRobotClient
 from .services.slam_service import SlamService
 from .services.ros_graph_service import RosGraphService
@@ -47,12 +48,14 @@ def build_runtime(config_path: str, transport: str = ""):
     robot = _create_robot_client(cfg, transport)
     context = AlgorithmContext(head_sensitivity=cfg.control.head_sensitivity)
     slam_service = SlamService(robot)
+    vision_service = VisionService()
     ros_graph = RosGraphService()
     state_file = Path(config_path).resolve().parent / "server_state.yaml"
     controller = ControllerService(
         robot,
         context=context,
         slam_service=slam_service,
+        vision_service=vision_service,
         state_file=state_file,
         profiles_config={
             "pause": cfg.profiles.pause,
@@ -60,10 +63,11 @@ def build_runtime(config_path: str, transport: str = ""):
             "teleop_slam": cfg.profiles.teleop_slam,
             "autonomy_profile_1": cfg.profiles.autonomy_profile_1,
             "following": cfg.profiles.following,
+            "staring": cfg.profiles.staring,
         },
     )
     app = create_app(controller, robot, cfg, slam_service=slam_service, ros_graph=ros_graph)
-    return cfg, app, controller, robot, slam_service, ros_graph
+    return cfg, app, controller, robot, slam_service, vision_service, ros_graph
 
 
 def main() -> None:
@@ -83,9 +87,10 @@ def main() -> None:
         args.config, args.transport or "(from config)", log_path,
     )
 
-    cfg, app, controller, robot, slam_service, ros_graph = build_runtime(args.config, args.transport)
+    cfg, app, controller, robot, slam_service, vision_service, ros_graph = build_runtime(args.config, args.transport)
     ros_bridge = Ros2ServerBridge(
         slam_service=slam_service,
+        vision_service=vision_service,
         robot_client=robot,
         odom_confidence_threshold=cfg.slam.odom_confidence_threshold,
         get_control_mode=lambda: controller.active_mode,
