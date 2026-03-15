@@ -26,6 +26,7 @@ class InputState:
     pending_actions: list[dict] = field(default_factory=list)
     dt: float = 0.0
     timestamp: float = field(default_factory=monotonic)
+    vision_latency_ms: float = 0.0  # Vision pipeline latency (ms), used for target extrapolation
 
 
 class ControlAlgorithm(ABC):

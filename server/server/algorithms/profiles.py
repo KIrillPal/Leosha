@@ -173,6 +173,7 @@ class StaringProfile(BaseControlProfile):
         head_tracking_deadzone: float,
         bbox_target_x_frac: float = 0.5,
         bbox_target_y_frac: float = 0.9,
+        latency_compensation_cap_frac: float = 0.5,
         vision_service: VisionService,
     ) -> None:
         self._forward_throttle = float(forward_throttle)
@@ -184,6 +185,7 @@ class StaringProfile(BaseControlProfile):
         self._head_tracking_deadzone = float(head_tracking_deadzone)
         self._bbox_target_x_frac = float(bbox_target_x_frac)
         self._bbox_target_y_frac = float(bbox_target_y_frac)
+        self._latency_compensation_cap_frac = float(latency_compensation_cap_frac)
         self._vision = vision_service
 
         self._head_pan = 0.0
@@ -193,6 +195,9 @@ class StaringProfile(BaseControlProfile):
         self._staring_track_id: int | None = None
         self._staring_debug: dict = {}
         self._staring_overlay: list[dict] = []
+        self._last_target_cx: float | None = None
+        self._last_target_cy: float | None = None
+        self._last_target_time: float | None = None
 
     @property
     def mode(self) -> ControlMode:
@@ -253,6 +258,39 @@ class StaringProfile(BaseControlProfile):
         cy = y1 + self._bbox_target_y_frac * (y2 - y1)
         return cx, cy
 
+    def _extrapolate_target(
+        self,
+        cx: float,
+        cy: float,
+        frame_w: int,
+        frame_h: int,
+        dt: float,
+        latency_ms: float,
+        now: float,
+    ) -> tuple[float, float]:
+        """Predict target position at command execution time using velocity and latency."""
+        prev_cx = self._last_target_cx
+        prev_cy = self._last_target_cy
+        prev_t = self._last_target_time
+        self._last_target_cx = cx
+        self._last_target_cy = cy
+        self._last_target_time = now
+        if latency_ms <= 0 or dt <= 0 or prev_cx is None or prev_cy is None or prev_t is None:
+            return cx, cy
+        vx = (cx - prev_cx) / dt
+        vy = (cy - prev_cy) / dt
+        latency_sec = latency_ms / 1000.0
+        dx = vx * latency_sec
+        dy = vy * latency_sec
+        cap = self._latency_compensation_cap_frac
+        max_dx = cap * max(1.0, float(frame_w))
+        max_dy = cap * max(1.0, float(frame_h))
+        dx = max(-max_dx, min(max_dx, dx))
+        dy = max(-max_dy, min(max_dy, dy))
+        cx_pred = max(0.0, min(float(frame_w), cx + dx))
+        cy_pred = max(0.0, min(float(frame_h), cy + dy))
+        return cx_pred, cy_pred
+
     def _track_head_by_point(self, cx: float, cy: float, frame_w: int, frame_h: int, dt: float) -> None:
         err_x = ((cx / max(1.0, float(frame_w))) - 0.5) * 2.0
         err_y = ((cy / max(1.0, float(frame_h))) - 0.5) * 2.0
@@ -262,7 +300,6 @@ class StaringProfile(BaseControlProfile):
             err_y = 0.0
         alpha = self._head_tracking_gain * max(0.0, dt)
         self._head_pan = max(-1.0, min(1.0, self._head_pan - err_x * alpha))
-        # err_y > 0 = target below center (image y down) -> tilt down (decrease tilt)
         self._head_tilt = max(-1.0, min(1.0, self._head_tilt - err_y * alpha))
 
     def _manual_head(self, context: AlgorithmContext, manual: ManualInputState) -> None:
@@ -343,10 +380,17 @@ class StaringProfile(BaseControlProfile):
             self._staring_state = "manual"
             self._staring_target = None
             self._staring_track_id = None
+            self._last_target_cx = None
+            self._last_target_cy = None
+            self._last_target_time = None
         elif matches:
             target_person, target_name = max(matches, key=lambda item: self._bbox_area(item[0]["bbox"]))
             frame_w, frame_h = self._frame_size(input_state.camera_frame)
             cx, cy = self._get_target_point(target_person)
+            cx, cy = self._extrapolate_target(
+                cx, cy, frame_w, frame_h,
+                input_state.dt, input_state.vision_latency_ms, input_state.timestamp,
+            )
             self._track_head_by_point(cx, cy, frame_w, frame_h, input_state.dt)
             self._staring_state = "staring"
             self._staring_target = target_name
@@ -361,6 +405,10 @@ class StaringProfile(BaseControlProfile):
             target_person = persons[0]
             frame_w, frame_h = self._frame_size(input_state.camera_frame)
             cx, cy = self._get_target_point(target_person)
+            cx, cy = self._extrapolate_target(
+                cx, cy, frame_w, frame_h,
+                input_state.dt, input_state.vision_latency_ms, input_state.timestamp,
+            )
             self._track_head_by_point(cx, cy, frame_w, frame_h, input_state.dt)
             self._staring_state = "staring_first_face_fallback"
             self._staring_target = None
@@ -376,6 +424,9 @@ class StaringProfile(BaseControlProfile):
             self._staring_state = "manual"
             self._staring_target = None
             self._staring_track_id = None
+            self._last_target_cx = None
+            self._last_target_cy = None
+            self._last_target_time = None
             self._staring_debug = {
                 "matched_tracks": [],
                 "vision_frame_id": self._vision.get_latest_frame_id(),
@@ -397,6 +448,9 @@ class StaringProfile(BaseControlProfile):
         self._staring_state = "manual"
         self._staring_target = None
         self._staring_track_id = None
+        self._last_target_cx = None
+        self._last_target_cy = None
+        self._last_target_time = None
         self._staring_overlay = []
 
     def post_tick(self, input_state: InputState) -> None:

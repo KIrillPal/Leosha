@@ -275,6 +275,7 @@ class ControllerService:
                 pending_actions=list(self._pending_actions),
                 dt=max(0.0, now - self._last_tick_at),
                 timestamp=now,
+                vision_latency_ms=float(self._last_head_command_latency_ms or 0.0),
             )
             self._pending_actions.clear()
             for action in input_state.pending_actions:
