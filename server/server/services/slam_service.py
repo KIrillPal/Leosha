@@ -122,6 +122,8 @@ class SlamService:
         """
         if self._tf_buffer is None:
             return
+        from tf2_ros import TransformException
+
         try:
             from rclpy.time import Time
             tf = self._tf_buffer.lookup_transform("map", "base_footprint", Time())
@@ -131,10 +133,10 @@ class SlamService:
             cosy_cosp = 1.0 - 2.0 * (r.y * r.y + r.z * r.z)
             theta = math.atan2(siny_cosp, cosy_cosp)
             self.update_pose(float(t.x), float(t.y), theta)
-        except Exception as e:
-            # map frame not in TF yet (slam_toolbox has not published it), or other TF lookup failure
-            if "LookupException" not in type(e).__name__ and "Transform" not in type(e).__name__:
-                raise
+        except TransformException:
+            # map frame not in TF yet, extrapolation window mismatch, etc.
+            # This is a normal transient condition while SLAM/TF warms up.
+            return
 
     def try_subscribe_ros(self, node) -> bool:
         """Subscribe to /map and set up TF listener for pose. Returns True if subscribed."""
