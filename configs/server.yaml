@@ -36,7 +36,7 @@ profiles:
     head_tracking_gain: 1.5
     head_tracking_deadzone: 0.1
     bbox_target_x_frac: 0.5
-    bbox_target_y_frac: 0.9
+    bbox_target_y_frac: 0.1
     latency_compensation_cap_frac: 0.3
 
 network:
