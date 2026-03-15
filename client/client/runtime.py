@@ -59,6 +59,7 @@ class ClientRuntime:
             OperatingMode.PAUSE: PauseExecutor(),
             OperatingMode.TELEOPERATION: teleop_exec,
             OperatingMode.TELEOP_SLAM: teleop_exec,
+            OperatingMode.STARING: teleop_exec,
             OperatingMode.AUTONOMY_PROFILE_1: AutonomyExecutor(
                 head_pan_min_deg=head_cfg.neck_min_deg,
                 head_pan_max_deg=head_cfg.neck_max_deg,
