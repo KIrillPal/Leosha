@@ -49,3 +49,22 @@ network:
 # SLAM: если уверенность клиента в одометрии (odom_confidence) < порог — в TF подаётся pose из slam_toolbox
 slam:
   odom_confidence_threshold: 0.5
+
+# Vision node: все параметры задаются здесь, без значений по умолчанию в launch
+vision:
+  yolo_model: "yolo11n-pose.pt"
+  yolo_imgsz: 640
+  tracker: "bytetrack.yaml"
+  enable_face_embedding: false
+  face_model: ""
+  embedding_interval: 25
+  face_min_confidence: 0.5
+  head_yaw_min_deg: -45.0
+  head_yaw_max_deg: 45.0
+  head_yaw_scale_deg: 57.2958
+  face_crop_ratio: 0.45
+  embedding_input_size: 112
+  embedding_norm_mean: 127.5
+  embedding_norm_std: 128.0
+  yaw_eye_dx_epsilon: 1.0e-6
+  log_level: "INFO"

@@ -25,21 +25,22 @@ class VisionNode(Node):
 
     def __init__(self) -> None:
         super().__init__("vision_node")
-        self.declare_parameter("yolo_model")
-        self.declare_parameter("yolo_imgsz")
-        self.declare_parameter("tracker")
-        self.declare_parameter("enable_face_embedding")
-        self.declare_parameter("face_model")
-        self.declare_parameter("embedding_interval")
-        self.declare_parameter("face_min_confidence")
-        self.declare_parameter("head_yaw_min_deg")
-        self.declare_parameter("head_yaw_max_deg")
-        self.declare_parameter("head_yaw_scale_deg")
-        self.declare_parameter("face_crop_ratio")
-        self.declare_parameter("embedding_input_size")
-        self.declare_parameter("embedding_norm_mean")
-        self.declare_parameter("embedding_norm_std")
-        self.declare_parameter("yaw_eye_dx_epsilon")
+        # Declare with default so rclpy does not warn; launch overwrites from config.
+        self.declare_parameter("yolo_model", "")
+        self.declare_parameter("yolo_imgsz", 640)
+        self.declare_parameter("tracker", "")
+        self.declare_parameter("enable_face_embedding", False)
+        self.declare_parameter("face_model", "")
+        self.declare_parameter("embedding_interval", 25)
+        self.declare_parameter("face_min_confidence", 0.5)
+        self.declare_parameter("head_yaw_min_deg", -45.0)
+        self.declare_parameter("head_yaw_max_deg", 45.0)
+        self.declare_parameter("head_yaw_scale_deg", 57.2958)
+        self.declare_parameter("face_crop_ratio", 0.45)
+        self.declare_parameter("embedding_input_size", 112)
+        self.declare_parameter("embedding_norm_mean", 127.5)
+        self.declare_parameter("embedding_norm_std", 128.0)
+        self.declare_parameter("yaw_eye_dx_epsilon", 1e-6)
 
         self._frame_id = 0
         self._embedding_cache: dict[int, _TrackCache] = {}
@@ -124,8 +125,15 @@ class VisionNode(Node):
     def _on_frame(self, msg: CompressedImage) -> None:
         self._frame_id += 1
         started_ns = perf_counter_ns()
-        persons = self._run_pipeline(msg.data, self._frame_id)
+        persons, arcface_count = self._run_pipeline(msg.data, self._frame_id)
         elapsed_ms = (perf_counter_ns() - started_ns) / 1_000_000.0
+        LOGGER.info(
+            "Vision frame_id=%d persons=%d inference_ms=%.1f arcface_ran=%s",
+            self._frame_id,
+            len(persons),
+            elapsed_ms,
+            arcface_count if self._enable_face_embedding else "disabled",
+        )
         payload = {
             "timestamp_ns": int(self.get_clock().now().nanoseconds),
             "frame_id": self._frame_id,
@@ -136,10 +144,19 @@ class VisionNode(Node):
         out.data = json.dumps(payload, ensure_ascii=True)
         self._pub.publish(out)
 
-    def _run_pipeline(self, jpeg_bytes: bytes, frame_id: int) -> list[dict]:
+    def _run_pipeline(self, jpeg_bytes: bytes, frame_id: int) -> tuple[list[dict], int]:
         frame = self._decode_jpeg(jpeg_bytes)
+        detect_start_ns = perf_counter_ns()
         tracks: list[dict] = self._detect_persons_fast(frame)
+        detect_ms = (perf_counter_ns() - detect_start_ns) / 1_000_000.0
+        LOGGER.debug(
+            "Detector frame_id=%d detected=%d detect_ms=%.1f",
+            frame_id,
+            len(tracks),
+            detect_ms,
+        )
         embedding_frame = (frame_id % self._embedding_interval) == 0
+        arcface_count = 0
 
         persons: list[dict] = []
         for track in tracks:
@@ -152,6 +169,8 @@ class VisionNode(Node):
                     emb = self._compute_face_embedding(frame, track)
                     self._embedding_cache[track_id] = _TrackCache(embedding=emb, last_frame_id=frame_id)
                     face_embedding = emb
+                    if self._enable_face_embedding and emb:
+                        arcface_count += 1
                 elif track_id in self._embedding_cache:
                     face_embedding = list(self._embedding_cache[track_id].embedding)
 
@@ -166,7 +185,7 @@ class VisionNode(Node):
                     "confidence": float(track["confidence"]),
                 }
             )
-        return persons
+        return persons, arcface_count
 
     def _decode_jpeg(self, jpeg_bytes: bytes):
         np_arr = self._np.frombuffer(jpeg_bytes, dtype=self._np.uint8)

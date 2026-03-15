@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import re
 from pathlib import Path
 
 from .config import load_server_config
@@ -98,6 +99,16 @@ def main() -> None:
     )
     ros_bridge.start()
     controller.start_command_loop(cfg.app.command_hz)
+
+    # Suppress werkzeug logs for successful GET (2xx) to avoid console spam
+    werkzeug_log = logging.getLogger("werkzeug")
+    class _SuppressSuccessfulGet(logging.Filter):
+        def filter(self, record: logging.LogRecord) -> bool:
+            msg = record.getMessage()
+            if '"GET ' in msg and re.search(r'" 2\d{2} ', msg):
+                return False
+            return True
+    werkzeug_log.addFilter(_SuppressSuccessfulGet())
 
     try:
         app.run(host=cfg.app.host, port=cfg.app.port, debug=False, threaded=True)

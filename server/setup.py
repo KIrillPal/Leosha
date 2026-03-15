@@ -62,6 +62,8 @@ setup(
         "PyYAML>=6.0",
         "pyzmq>=25.0",
         "msgpack>=1.0",
+        "opencv-python>=4.5",
+        "ultralytics>=8.0",
     ],
     extras_require={
         "test": [
