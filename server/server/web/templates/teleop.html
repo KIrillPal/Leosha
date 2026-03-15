@@ -46,7 +46,7 @@
         <span>
             Position: X=<span id="posX">0</span> Y=<span id="posY">0</span> |
             Cmd throttle=<span id="cmdSpeed">0.00</span> steer=<span id="cmdSteer">0.00</span> pan=<span id="cmdPan">0.0</span>° tilt=<span id="cmdTilt">0.0</span>° |
-            Telem v=<span id="telemSpeed">0.00</span> steer=<span id="telemSteer">0.00</span>° yaw_rate=<span id="telemYawRate">0.00</span> |
+            Telem v=<span id="telemSpeed">0.00</span> steer=<span id="telemSteer">0.00</span>° yaw_rate=<span id="telemYawRate">0.00</span> | head_latency_ms=<span id="telemHeadLatency">—</span> |
             <span id="staringMeta"></span>
             <span id="controlStatus">Disabled</span>
         </span>
@@ -59,7 +59,7 @@ const trackingBtn=document.getElementById('trackingBtn'),controlStatus=document.
 const staringMeta=document.getElementById('staringMeta');
 const posX=document.getElementById('posX'),posY=document.getElementById('posY');
 const cmdSpeed=document.getElementById('cmdSpeed'),cmdSteer=document.getElementById('cmdSteer'),cmdPan=document.getElementById('cmdPan'),cmdTilt=document.getElementById('cmdTilt');
-const telemSpeed=document.getElementById('telemSpeed'),telemSteer=document.getElementById('telemSteer'),telemYawRate=document.getElementById('telemYawRate');
+const telemSpeed=document.getElementById('telemSpeed'),telemSteer=document.getElementById('telemSteer'),telemYawRate=document.getElementById('telemYawRate'),telemHeadLatency=document.getElementById('telemHeadLatency');
 const staringOverlay=document.getElementById('staringOverlay');
 const overlayCtx=staringOverlay.getContext('2d');
 const keyMap={w:keyW,a:keyA,s:keyS,d:keyD,shift:keyShift};
@@ -157,6 +157,7 @@ setInterval(async()=>{
     telemSpeed.textContent=Number(t.speed_mps||0).toFixed(2);
     telemSteer.textContent=Number(t.steering_deg!=null?t.steering_deg:(t.steering_rad||0)*57.296).toFixed(1);
     telemYawRate.textContent=Number(t.imu_yaw_rate||0).toFixed(2);
+    telemHeadLatency.textContent=t.head_command_latency_ms!=null?Number(t.head_command_latency_ms).toFixed(0):'—';
     const ps=d.profile_state||{};
     if((d.mode||'')==='staring'){
         const trackId=(ps.staring_track_id==null)?'-':ps.staring_track_id;

@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import threading
 from pathlib import Path
-from time import monotonic, sleep
+from time import monotonic, sleep, time
 
 import yaml
 
@@ -53,6 +53,7 @@ class ControllerService:
         self._manual = ManualInputState()
         self._last_telemetry = TelemetryFrame()
         self._last_command = ControlCommand()
+        self._last_head_command_latency_ms: float | None = None
         self._pending_actions: list[dict] = []
         self._last_tick_at = monotonic()
         self._lock = threading.Lock()
@@ -242,6 +243,7 @@ class ControllerService:
                     "steering_rad": float(self._last_telemetry.steering_rad),
                     "steering_deg": float(self._last_telemetry.steering_rad) * 57.29577951308232,
                     "imu_yaw_rate": float(self._last_telemetry.imu_yaw_rate),
+                    "head_command_latency_ms": self._last_head_command_latency_ms,
                 },
                 "profile_state": ui_state,
             }
@@ -283,6 +285,13 @@ class ControllerService:
             self._last_command = command
             self._last_tick_at = now
         self._robot.send_command(command)
+        # Latency from vision result received to command sent (ms)
+        try:
+            recv = self._vision_service.get_last_receive_time()
+            if recv > 0:
+                self._last_head_command_latency_ms = (time() - recv) * 1000.0
+        except Exception:
+            pass
         return command
 
     def start_command_loop(self, hz: float) -> None:

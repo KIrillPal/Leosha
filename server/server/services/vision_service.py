@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import threading
+import time
 
 LOGGER = logging.getLogger(__name__)
 
@@ -15,6 +16,7 @@ class VisionService:
         self._persons: list[dict] = []
         self._latest_frame_id = -1
         self._latest_timestamp_ns = 0
+        self._last_receive_time = 0.0  # time.time() when last /vision/persons received
         self._ros_subscribers: list[str] = []
 
     def try_subscribe_ros(self, node) -> bool:
@@ -27,10 +29,12 @@ class VisionService:
                 raise ValueError("vision payload field 'persons' must be list")
             frame_id = int(payload["frame_id"])
             timestamp_ns = int(payload["timestamp_ns"])
+            receive_time = time.time()
             with self._lock:
                 self._persons = [dict(person) for person in persons]
                 self._latest_frame_id = frame_id
                 self._latest_timestamp_ns = timestamp_ns
+                self._last_receive_time = receive_time
 
         node.create_subscription(String, "/vision/persons", on_persons, 10)
         self._ros_subscribers.append("/vision/persons")
@@ -44,6 +48,11 @@ class VisionService:
     def get_latest_frame_id(self) -> int:
         with self._lock:
             return int(self._latest_frame_id)
+
+    def get_last_receive_time(self) -> float:
+        """Monotonic receive time (time.time()) when last /vision/persons was received."""
+        with self._lock:
+            return float(self._last_receive_time)
 
     def get_stats(self) -> dict:
         with self._lock:

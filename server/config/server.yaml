@@ -33,7 +33,7 @@ profiles:
     forward_fast_throttle: 0.5
     friend_embeddings_db: "data/friends.db"
     face_match_threshold: 0.5
-    head_tracking_gain: 0.5
+    head_tracking_gain: 1.5
     head_tracking_deadzone: 0.03
 
 network:
@@ -54,7 +54,7 @@ slam:
 vision:
   yolo_model: "/home/kir/Leosha/models/yolo11n-pose.pt"
   yolo_device: "intel:cpu"
-  yolo_conf: 0.7
+  yolo_conf: 0.5
   yolo_imgsz: 320
   tracker: "bytetrack.yaml"
   enable_face_embedding: false
