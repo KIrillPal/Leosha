@@ -312,7 +312,7 @@ class VisionNode(Node):
                 for kp_idx in range(int(xy.shape[0])):
                     x = float(xy[kp_idx][0].item())
                     y = float(xy[kp_idx][1].item())
-                    c = float(conf[kp_idx].item()) if conf is not None else 1.0
+                    c = float(conf[kp_idx].item()) if conf is not None else 0.0
                     kp_data.append([x, y, c])
                 if len(kp_data) > 0:
                     face_visible = kp_data[0][2] >= self._face_min_confidence

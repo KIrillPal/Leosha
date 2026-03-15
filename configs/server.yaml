@@ -35,6 +35,8 @@ profiles:
     face_match_threshold: 0.5
     head_tracking_gain: 1.5
     head_tracking_deadzone: 0.03
+    bbox_target_x_frac: 0.5
+    bbox_target_y_frac: 0.9
 
 network:
   grafana_url: ""

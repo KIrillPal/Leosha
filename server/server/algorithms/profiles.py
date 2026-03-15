@@ -171,6 +171,8 @@ class StaringProfile(BaseControlProfile):
         face_match_threshold: float,
         head_tracking_gain: float,
         head_tracking_deadzone: float,
+        bbox_target_x_frac: float = 0.5,
+        bbox_target_y_frac: float = 0.9,
         vision_service: VisionService,
     ) -> None:
         self._forward_throttle = float(forward_throttle)
@@ -180,6 +182,8 @@ class StaringProfile(BaseControlProfile):
         self._face_match_threshold = float(face_match_threshold)
         self._head_tracking_gain = float(head_tracking_gain)
         self._head_tracking_deadzone = float(head_tracking_deadzone)
+        self._bbox_target_x_frac = float(bbox_target_x_frac)
+        self._bbox_target_y_frac = float(bbox_target_y_frac)
         self._vision = vision_service
 
         self._head_pan = 0.0
@@ -226,10 +230,30 @@ class StaringProfile(BaseControlProfile):
         img = Image.open(BytesIO(camera_frame))
         return int(img.width), int(img.height)
 
-    def _track_head_by_bbox(self, bbox: list[float], frame_w: int, frame_h: int, dt: float) -> None:
-        x1, y1, x2, y2 = [float(v) for v in bbox]
-        cx = (x1 + x2) * 0.5
-        cy = (y1 + y2) * 0.5
+    def _get_target_point(self, person: dict, min_eye_confidence: float = 0.3) -> tuple[float, float]:
+        """Target for head tracking: midpoint between eyes if pose has valid eyes,
+        else bbox point at (bbox_target_x_frac, bbox_target_y_frac) from top-left.
+        COCO keypoints: 0=nose, 1=left_eye, 2=right_eye."""
+        kps = person.get("keypoints") or []
+        bbox = person.get("bbox") or [0.0, 0.0, 1.0, 1.0]
+        x1, y1, x2, y2 = [float(v) for v in bbox[:4]]
+        if len(kps) >= 3:
+            left_eye = kps[1] if len(kps) > 1 else []
+            right_eye = kps[2] if len(kps) > 2 else []
+            if (
+                len(left_eye) >= 3
+                and len(right_eye) >= 3
+                and float(left_eye[2]) >= min_eye_confidence
+                and float(right_eye[2]) >= min_eye_confidence
+            ):
+                cx = (float(left_eye[0]) + float(right_eye[0])) * 0.5
+                cy = (float(left_eye[1]) + float(right_eye[1])) * 0.5
+                return cx, cy
+        cx = x1 + self._bbox_target_x_frac * (x2 - x1)
+        cy = y1 + self._bbox_target_y_frac * (y2 - y1)
+        return cx, cy
+
+    def _track_head_by_point(self, cx: float, cy: float, frame_w: int, frame_h: int, dt: float) -> None:
         err_x = ((cx / max(1.0, float(frame_w))) - 0.5) * 2.0
         err_y = ((cy / max(1.0, float(frame_h))) - 0.5) * 2.0
         if abs(err_x) < self._head_tracking_deadzone:
@@ -322,7 +346,8 @@ class StaringProfile(BaseControlProfile):
         elif matches:
             target_person, target_name = max(matches, key=lambda item: self._bbox_area(item[0]["bbox"]))
             frame_w, frame_h = self._frame_size(input_state.camera_frame)
-            self._track_head_by_bbox(target_person["bbox"], frame_w, frame_h, input_state.dt)
+            cx, cy = self._get_target_point(target_person)
+            self._track_head_by_point(cx, cy, frame_w, frame_h, input_state.dt)
             self._staring_state = "staring"
             self._staring_target = target_name
             self._staring_track_id = int(target_person["track_id"])
@@ -335,7 +360,8 @@ class StaringProfile(BaseControlProfile):
         elif persons:
             target_person = persons[0]
             frame_w, frame_h = self._frame_size(input_state.camera_frame)
-            self._track_head_by_bbox(target_person["bbox"], frame_w, frame_h, input_state.dt)
+            cx, cy = self._get_target_point(target_person)
+            self._track_head_by_point(cx, cy, frame_w, frame_h, input_state.dt)
             self._staring_state = "staring_first_face_fallback"
             self._staring_target = None
             self._staring_track_id = int(target_person["track_id"])
