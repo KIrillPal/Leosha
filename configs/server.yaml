@@ -42,8 +42,8 @@ profiles:
     gyro_compensation_gain: 0.0
     gyro_compensation_neck_max_deg_fallback: 135.0
   silly_following:
-    forward_throttle: 0.3
-    backward_throttle: -0.15
+    forward_throttle: 0.35
+    backward_throttle: -0.25
     friend_embeddings_db: "data/friends.db"
     face_match_threshold: 0.5
     eye_confidence_threshold: 0.3
@@ -54,14 +54,14 @@ profiles:
     latency_compensation_cap_frac: 0.3
     gyro_compensation_gain: 1.0
     gyro_compensation_neck_max_deg_fallback: 135.0
-    steering_gain: 1.0
+    steering_gain: 2.0
     steering_deadzone: 0.03
     steering_yaw_damping_gain: 0.2
     steering_yaw_damping_min: 0.55
     front_obstacle_distance_m: 0.15
-    side_obstacle_distance_m: 0.15
+    side_obstacle_distance_m: 0.3
     rear_clear_distance_m: 0.3
-    side_steering_nudge: 1.0
+    side_steering_nudge: 0.5
     reverse_timeout_sec: 1.5
     reverse_steering_multiplier: -1.0
     forward_speed_steering_reduction_gain: 0.4
@@ -70,8 +70,8 @@ profiles:
     head_tilt_deg_fallback_scale: 75.0
     stop_without_lidar: true
     front_sector_half_angle_deg: 30.0
-    side_sector_outer_angle_deg: 90.0
-    rear_sector_start_angle_deg: 160.0
+    side_sector_outer_angle_deg: 120.0
+    rear_sector_start_angle_deg: 170.0
 
 network:
   grafana_url: ""
