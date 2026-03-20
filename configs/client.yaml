@@ -44,13 +44,16 @@ diagnostics:
   wifi_rssi_dbm: -44.0 # примерное значение
 
 network:
-  server_host: "10.147.4.153"
+  server_hosts:
+    - "192.168.31.70"
+    - "10.147.4.153"
   telemetry_port: 5550
   command_port: 5552
   report_port: 5553
   recv_timeout_ms: 0
   send_high_water_mark: 2
   recv_high_water_mark: 1
+  failover_no_command_timeout_sec: 3.0
 
 actuators:
   backend: "pca9685"

@@ -45,7 +45,6 @@ def test_zmq_bridge_send_and_receive():
     telemetry_sub.bind(f"tcp://127.0.0.1:{telemetry_port}")
 
     command_pub = ctx.socket(zmq.PUB)
-    command_pub.bind(f"tcp://127.0.0.1:{command_port}")
 
     report_sub = ctx.socket(zmq.SUB)
     report_sub.setsockopt_string(zmq.SUBSCRIBE, "")
@@ -57,15 +56,16 @@ def test_zmq_bridge_send_and_receive():
         command_port=command_port,
         report_port=report_port,
     )
+    command_pub.connect(f"tcp://127.0.0.1:{command_port}")
     time.sleep(0.2)
 
     outgoing = ServerPacket(
         header=ServerPacketHeader(seq=7, timestamp_ns=123, mode=OperatingMode.TELEOPERATION),
         teleop_cmd=TeleoperationCommand(speed=0.2, steering=-0.1, head_pan=0.0, head_tilt=0.0),
     )
-    command_pub.send(pack_server_packet(outgoing))
     incoming = None
     for _ in range(20):
+        command_pub.send(pack_server_packet(outgoing))
         time.sleep(0.02)
         incoming = bridge.recv_packet()
         if incoming is not None:
@@ -124,4 +124,21 @@ def test_zmq_bridge_send_and_receive():
     telemetry_sub.close(0)
     command_pub.close(0)
     report_sub.close(0)
+
+
+def test_zmq_bridge_failover_switches_active_host_on_timeout():
+    command_port = _free_port()
+    bridge = ZmqBridge(
+        server_hosts=["10.255.255.1", "127.0.0.1"],
+        telemetry_port=_free_port(),
+        command_port=command_port,
+        report_port=_free_port(),
+        failover_no_command_timeout_sec=0.01,
+    )
+    first_host = bridge.active_server_host
+    time.sleep(0.02)
+    bridge.recv_packet()
+    second_host = bridge.active_server_host
+    assert first_host != second_host
+    bridge.close()
 

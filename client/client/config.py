@@ -161,12 +161,14 @@ class SensorsConfig:
 @dataclass
 class NetworkConfig:
     server_host: str = "127.0.0.1"
+    server_hosts: list[str] = field(default_factory=lambda: ["127.0.0.1"])
     telemetry_port: int = 5550
     command_port: int = 5552
     report_port: int = 5553
     recv_timeout_ms: int = 0
     send_high_water_mark: int = 2
     recv_high_water_mark: int = 1
+    failover_no_command_timeout_sec: float = 3.0
 
 
 @dataclass
@@ -285,6 +287,17 @@ def load_client_config(path: str) -> ClientConfig:
     wheel_raw = actuators_raw.get("wheel", {})
     neck_raw = actuators_raw.get("neck", {})
     face_raw = actuators_raw.get("face", {})
+    raw_hosts = network_raw.get("server_hosts", None)
+    if isinstance(raw_hosts, list):
+        server_hosts = [str(host).strip() for host in raw_hosts if str(host).strip()]
+    else:
+        server_hosts = []
+    if not server_hosts:
+        fallback_host = str(network_raw.get("server_host", "127.0.0.1")).strip()
+        if not fallback_host:
+            fallback_host = "127.0.0.1"
+        server_hosts = [fallback_host]
+
     return ClientConfig(
         app=AppConfig(
             telemetry_hz=float(app_raw.get("telemetry_hz", 30.0)),
@@ -381,13 +394,15 @@ def load_client_config(path: str) -> ClientConfig:
             ),
         ),
         network=NetworkConfig(
-            server_host=str(network_raw.get("server_host", "127.0.0.1")),
+            server_host=server_hosts[0],
+            server_hosts=server_hosts,
             telemetry_port=int(network_raw.get("telemetry_port", 5550)),
             command_port=int(network_raw.get("command_port", 5552)),
             report_port=int(network_raw.get("report_port", 5553)),
             recv_timeout_ms=int(network_raw.get("recv_timeout_ms", 0)),
             send_high_water_mark=int(network_raw.get("send_high_water_mark", 2)),
             recv_high_water_mark=int(network_raw.get("recv_high_water_mark", 1)),
+            failover_no_command_timeout_sec=float(network_raw.get("failover_no_command_timeout_sec", 3.0)),
         ),
         actuators=ActuatorsConfig(
             backend=str(actuators_raw.get("backend", "mock")),

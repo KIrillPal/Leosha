@@ -10,6 +10,8 @@ def test_config_contains_robot_geometry_and_sensor_settings(client_config):
     assert geom.head.neck_max_deg > geom.head.neck_min_deg
     assert client_config.sensors.camera.fail_policy.max_consecutive_failures >= 1
     assert client_config.sensors.lidar.port.startswith("/dev/")
+    assert len(client_config.network.server_hosts) >= 1
+    assert client_config.network.server_host == client_config.network.server_hosts[0]
 
 
 def test_head_limits_are_only_loaded_from_robot_geometry(client_config):

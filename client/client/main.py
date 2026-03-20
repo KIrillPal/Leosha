@@ -49,12 +49,14 @@ def main() -> None:
     else:
         bridge = ZmqBridge(
             server_host=config.network.server_host,
+            server_hosts=config.network.server_hosts,
             telemetry_port=config.network.telemetry_port,
             command_port=config.network.command_port,
             report_port=config.network.report_port,
             recv_timeout_ms=config.network.recv_timeout_ms,
             send_high_water_mark=config.network.send_high_water_mark,
             recv_high_water_mark=config.network.recv_high_water_mark,
+            failover_no_command_timeout_sec=config.network.failover_no_command_timeout_sec,
         )
     if str(config.actuators.backend).lower() == "pca9685":
         actuators = Pca9685ActuatorDriver(config.actuators, config.robot_geometry.head)

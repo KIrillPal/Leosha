@@ -16,13 +16,17 @@ diagnostics:
   wifi_rssi_dbm: -44.0    # Уровень Wi‑Fi для отображения (дБм)
 
 network:
-  server_host: "127.0.0.1"  # IP или hostname сервера
+  server_hosts:              # Список IP/hostname серверов (по порядку приоритета)
+    - "127.0.0.1"
+    - "127.0.0.2"
+  server_host: "127.0.0.1"  # Устаревшее поле, оставлено для совместимости
   telemetry_port: 5550      # Порт публикации телеметрии (ZMQ)
   command_port: 5552        # Порт приёма команд (ZMQ)
   report_port: 5553         # Порт отчётов о пропущенных пакетах (ZMQ)
   recv_timeout_ms: 0        # Таймаут приёма (0 = не блокировать)
   send_high_water_mark: 2   # HWM для исходящих сокетов
   recv_high_water_mark: 1    # HWM для входящих сокетов
+  failover_no_command_timeout_sec: 3.0  # Через сколько секунд без команд переключаться на следующий сервер
 
 actuators:
   backend: "mock"         # "mock" | "pca9685"

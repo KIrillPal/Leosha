@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from collections import deque
 from dataclasses import dataclass
-from time import monotonic_ns
+from time import monotonic, monotonic_ns
 
 from ..models import ServerPacket, TelemetryPacket
 from .mock_server import MockServer
@@ -58,13 +58,15 @@ class ZmqBridge:
 
     def __init__(
         self,
-        server_host: str,
-        telemetry_port: int,
-        command_port: int,
-        report_port: int,
+        server_host: str = "127.0.0.1",
+        server_hosts: list[str] | None = None,
+        telemetry_port: int = 5550,
+        command_port: int = 5552,
+        report_port: int = 5553,
         recv_timeout_ms: int = 0,
         send_high_water_mark: int = 2,
         recv_high_water_mark: int = 1,
+        failover_no_command_timeout_sec: float = 3.0,
     ) -> None:
         try:
             import zmq
@@ -73,11 +75,21 @@ class ZmqBridge:
         self._zmq = zmq
         self._ctx = zmq.Context.instance()
         self._stats = BridgeStats()
+        hosts = [str(host).strip() for host in (server_hosts or []) if str(host).strip()]
+        if not hosts:
+            hosts = [str(server_host).strip()]
+        if not hosts or not hosts[0]:
+            raise ValueError("At least one server host is required")
+        self._server_hosts = hosts
+        self._server_host_index = 0
+        self._failover_no_command_timeout_sec = float(failover_no_command_timeout_sec)
+        self._last_rx_monotonic = monotonic()
+        self._telemetry_port = int(telemetry_port)
+        self._report_port = int(report_port)
 
         self._telemetry_pub = self._ctx.socket(zmq.PUB)
         self._telemetry_pub.setsockopt(zmq.SNDHWM, int(send_high_water_mark))
         self._telemetry_pub.setsockopt(zmq.IMMEDIATE, 1)
-        self._telemetry_pub.connect(f"tcp://{server_host}:{int(telemetry_port)}")
 
         self._command_sub = self._ctx.socket(zmq.SUB)
         self._command_sub.setsockopt_string(zmq.SUBSCRIBE, "")
@@ -89,26 +101,58 @@ class ZmqBridge:
         self._report_pub = self._ctx.socket(zmq.PUB)
         self._report_pub.setsockopt(zmq.SNDHWM, int(send_high_water_mark))
         self._report_pub.setsockopt(zmq.IMMEDIATE, 1)
-        self._report_pub.connect(f"tcp://{server_host}:{int(report_port)}")
+        self._connect_publishers_to_current_host()
         LOGGER.info(
-            "ZmqBridge connected | host=%s telemetry=%s command=%s report=%s",
-            server_host,
+            "ZmqBridge connected | hosts=%s active_host=%s telemetry=%s command=%s report=%s failover_timeout=%.2fs",
+            self._server_hosts,
+            self.active_server_host,
             telemetry_port,
             command_port,
             report_port,
+            self._failover_no_command_timeout_sec,
         )
 
     @property
     def stats(self) -> BridgeStats:
         return self._stats
 
+    @property
+    def active_server_host(self) -> str:
+        return self._server_hosts[self._server_host_index]
+
+    def _telemetry_endpoint(self, host: str) -> str:
+        return f"tcp://{host}:{self._telemetry_port}"
+
+    def _report_endpoint(self, host: str) -> str:
+        return f"tcp://{host}:{self._report_port}"
+
+    def _connect_publishers_to_current_host(self) -> None:
+        host = self.active_server_host
+        self._telemetry_pub.connect(self._telemetry_endpoint(host))
+        self._report_pub.connect(self._report_endpoint(host))
+
+    def _switch_to_next_host(self) -> None:
+        if len(self._server_hosts) <= 1:
+            return
+        current_host = self.active_server_host
+        self._telemetry_pub.disconnect(self._telemetry_endpoint(current_host))
+        self._report_pub.disconnect(self._report_endpoint(current_host))
+        self._server_host_index = (self._server_host_index + 1) % len(self._server_hosts)
+        self._connect_publishers_to_current_host()
+        LOGGER.warning("No commands received in %.2fs; failover to server host %s", self._failover_no_command_timeout_sec, self.active_server_host)
+
     def recv_packet(self) -> ServerPacket | None:
         try:
             raw = self._command_sub.recv(flags=self._zmq.NOBLOCK)
         except self._zmq.Again:
+            elapsed = monotonic() - self._last_rx_monotonic
+            if elapsed >= self._failover_no_command_timeout_sec:
+                self._switch_to_next_host()
+                self._last_rx_monotonic = monotonic()
             return None
         packet = unpack_server_packet(raw)
         self._stats.rx_packets += 1
+        self._last_rx_monotonic = monotonic()
         return packet
 
     def send_telemetry(self, packet: TelemetryPacket) -> None:
