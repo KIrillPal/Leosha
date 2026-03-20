@@ -20,7 +20,11 @@ def _configs_dir() -> Path:
 @pytest.fixture
 def client_config():
     cfg_path = _configs_dir() / "client.yaml"
-    return load_client_config(str(cfg_path))
+    cfg = load_client_config(str(cfg_path))
+    # Disable default binning in unit tests: many assertions expect
+    # scan.ranges length == number of input points.
+    cfg.sensors.lidar.expected_num_rays = 0
+    return cfg
 
 
 @pytest.fixture

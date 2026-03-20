@@ -91,7 +91,7 @@ function drawStaringOverlay(status){
     const mode=status.mode||'';
     const profile=status.profile_state||{};
     const overlay=profile.staring_overlay||[];
-    if(mode!=='staring'||!Array.isArray(overlay)||overlay.length===0){return;}
+    if(mode!=='staring'&&mode!=='silly_following'||!Array.isArray(overlay)||overlay.length===0){return;}
     const vr=videoRenderRect();
     if(!vr){return;}
     for(const p of overlay){
@@ -136,7 +136,7 @@ function drawStaringOverlay(status){
         }
     }
 }
-async function enableTracking(){const req=videoContainer.requestPointerLock||videoContainer.mozRequestPointerLock||videoContainer.webkitRequestPointerLock;if(!req)return;req.call(videoContainer);const st=await(await fetch('/api/status')).json();const cur=st.mode||'';if(cur!=='teleop_slam'&&cur!=='teleoperation'&&cur!=='staring')await setMode('teleoperation');isTracking=true;trackingBtn.textContent='Disable Control';trackingBtn.classList.add('active');controlStatus.textContent='Enabled';controlStatus.style.color='green';updateButtonStates();setTracking(true);}
+async function enableTracking(){const req=videoContainer.requestPointerLock||videoContainer.mozRequestPointerLock||videoContainer.webkitRequestPointerLock;if(!req)return;req.call(videoContainer);const st=await(await fetch('/api/status')).json();const cur=st.mode||'';if(cur!=='teleop_slam'&&cur!=='teleoperation'&&cur!=='staring'&&cur!=='silly_following')await setMode('teleoperation');isTracking=true;trackingBtn.textContent='Disable Control';trackingBtn.classList.add('active');controlStatus.textContent='Enabled';controlStatus.style.color='green';updateButtonStates();setTracking(true);}
 function disableTracking(){const exit=document.exitPointerLock||document.mozExitPointerLock||document.webkitExitPointerLock;if(exit)exit.call(document);isTracking=false;trackingBtn.textContent='Enable Control';trackingBtn.classList.remove('active');controlStatus.textContent='Disabled';controlStatus.style.color='red';updateButtonStates();['w','a','s','d','shift'].forEach(k=>updateKeyIndicator(k,false));fetch('/api/car/stop',{method:'POST'});setTracking(false);}
 function toggleTracking(){isTracking?disableTracking():enableTracking();}
 function handlePointerLockChange(){isPointerLocked=(document.pointerLockElement===videoContainer||document.mozPointerLockElement===videoContainer||document.webkitPointerLockElement===videoContainer);centerDot.style.display=isPointerLocked?'block':'none';videoFeed.style.cursor=isPointerLocked?'none':'default';if(!isPointerLocked&&isTracking)disableTracking();}
@@ -159,7 +159,7 @@ setInterval(async()=>{
     telemYawRate.textContent=Number(t.imu_yaw_rate||0).toFixed(2);
     telemHeadLatency.textContent=t.head_command_latency_ms!=null?Number(t.head_command_latency_ms).toFixed(0):'—';
     const ps=d.profile_state||{};
-    if((d.mode||'')==='staring'){
+    if((d.mode||'')==='staring'||(d.mode||'')==='silly_following'){
         const trackId=(ps.staring_track_id==null)?'-':ps.staring_track_id;
         staringMeta.textContent=`| Staring: ${ps.staring_state||'manual'} target=${ps.staring_target||'-'} track=${trackId} persons=${Number(ps.persons_count||0)}`;
     }else{

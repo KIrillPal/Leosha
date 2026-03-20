@@ -86,6 +86,7 @@ class ZmqBridge:
         self._last_rx_monotonic = monotonic()
         self._telemetry_port = int(telemetry_port)
         self._report_port = int(report_port)
+        self._connected_hosts: set[str] = set()
 
         self._telemetry_pub = self._ctx.socket(zmq.PUB)
         self._telemetry_pub.setsockopt(zmq.SNDHWM, int(send_high_water_mark))
@@ -101,7 +102,7 @@ class ZmqBridge:
         self._report_pub = self._ctx.socket(zmq.PUB)
         self._report_pub.setsockopt(zmq.SNDHWM, int(send_high_water_mark))
         self._report_pub.setsockopt(zmq.IMMEDIATE, 1)
-        self._connect_publishers_to_current_host()
+        self._ensure_connected_to_active_host()
         LOGGER.info(
             "ZmqBridge connected | hosts=%s active_host=%s telemetry=%s command=%s report=%s failover_timeout=%.2fs",
             self._server_hosts,
@@ -126,20 +127,27 @@ class ZmqBridge:
     def _report_endpoint(self, host: str) -> str:
         return f"tcp://{host}:{self._report_port}"
 
-    def _connect_publishers_to_current_host(self) -> None:
-        host = self.active_server_host
+    def _ensure_connected_to_host(self, host: str) -> None:
+        if host in self._connected_hosts:
+            return
         self._telemetry_pub.connect(self._telemetry_endpoint(host))
         self._report_pub.connect(self._report_endpoint(host))
+        self._connected_hosts.add(host)
+
+    def _ensure_connected_to_active_host(self) -> None:
+        self._ensure_connected_to_host(self.active_server_host)
 
     def _switch_to_next_host(self) -> None:
         if len(self._server_hosts) <= 1:
             return
-        current_host = self.active_server_host
-        self._telemetry_pub.disconnect(self._telemetry_endpoint(current_host))
-        self._report_pub.disconnect(self._report_endpoint(current_host))
         self._server_host_index = (self._server_host_index + 1) % len(self._server_hosts)
-        self._connect_publishers_to_current_host()
-        LOGGER.warning("No commands received in %.2fs; failover to server host %s", self._failover_no_command_timeout_sec, self.active_server_host)
+        # Do NOT disconnect old hosts: if a server starts later, it should still receive telemetry.
+        self._ensure_connected_to_active_host()
+        LOGGER.warning(
+            "No commands received in %.2fs; failover to server host %s (keeping previous connections)",
+            self._failover_no_command_timeout_sec,
+            self.active_server_host,
+        )
 
     def recv_packet(self) -> ServerPacket | None:
         try:
