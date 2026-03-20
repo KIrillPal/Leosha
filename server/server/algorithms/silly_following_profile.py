@@ -119,7 +119,10 @@ class SillyFollowingProfile(HeadTrackingMixin, BaseControlProfile):
         return self._head_tilt * self._head_tilt_deg_fallback_scale
 
     def _angle_deg(self, angle_min: float, angle_increment: float, index: int) -> float:
-        return math.degrees(angle_min + angle_increment * index)
+        # Lidar raw angles are not guaranteed to be wrapped to [-pi, pi].
+        # Normalize degrees to [-180, 180] so sector checks are consistent.
+        raw = math.degrees(angle_min + angle_increment * index)
+        return ((raw + 180.0) % 360.0) - 180.0
 
     def _analyze_lidar(self, scan: dict | None) -> _LidarSectors:
         if scan is None:
@@ -310,6 +313,13 @@ class SillyFollowingProfile(HeadTrackingMixin, BaseControlProfile):
 
     def get_ui_state(self) -> dict:
         head_tilt_deg = self._head_tilt * self._head_tilt_deg_fallback_scale
+
+        def _json_safe_dist(v: float) -> float | None:
+            # Ensure UI JSON remains valid: Infinity/NaN are not valid JSON values.
+            if not math.isfinite(v):
+                return None
+            return float(v)
+
         return {
             "x": float(self._head_pan),
             "y": float(self._head_tilt),
@@ -322,10 +332,10 @@ class SillyFollowingProfile(HeadTrackingMixin, BaseControlProfile):
             "staring_debug": dict(self._tracking_debug),
             "staring_overlay": list(self._tracking_overlay),
             "lidar_sectors": {
-                "front_min_m": self._last_sectors.front_min_m,
-                "left_min_m": self._last_sectors.left_min_m,
-                "right_min_m": self._last_sectors.right_min_m,
-                "rear_min_m": self._last_sectors.rear_min_m,
+                "front_min_m": _json_safe_dist(self._last_sectors.front_min_m),
+                "left_min_m": _json_safe_dist(self._last_sectors.left_min_m),
+                "right_min_m": _json_safe_dist(self._last_sectors.right_min_m),
+                "rear_min_m": _json_safe_dist(self._last_sectors.rear_min_m),
             },
             "follow_debug": {
                 "speed": self._last_speed,
