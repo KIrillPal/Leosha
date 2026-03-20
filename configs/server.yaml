@@ -71,7 +71,7 @@ profiles:
     stop_without_lidar: true
     front_sector_half_angle_deg: 30.0
     side_sector_outer_angle_deg: 90.0
-    rear_sector_start_angle_deg: 150.0
+    rear_sector_start_angle_deg: 160.0
 
 network:
   grafana_url: ""
