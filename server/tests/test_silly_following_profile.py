@@ -103,6 +103,7 @@ def _build_profile(tmp_path, vision: MockVisionService) -> SillyFollowingProfile
         search_pan_max_deg=135.0,
         search_tilt_min_axis=-1.0,
         search_tilt_max_axis=1.0,
+        stable_track_frames=1,
         vision_service=vision,
     )
 
@@ -274,6 +275,7 @@ def test_silly_following_enters_searching_and_moves_head_after_timeout(tmp_path)
         search_pan_max_deg=60.0,
         search_tilt_min_axis=-0.6,
         search_tilt_max_axis=-0.4,
+        stable_track_frames=1,
         vision_service=vision,
     )
 

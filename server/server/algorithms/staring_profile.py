@@ -24,6 +24,7 @@ class StaringProfile(HeadTrackingMixin, BaseControlProfile):
         latency_compensation_cap_frac: float = 0.5,
         gyro_compensation_gain: float = 0.0,
         gyro_compensation_neck_max_deg_fallback: float = 135.0,
+        stable_track_frames: int = 10,
         vision_service: VisionService,
     ) -> None:
         self._forward_throttle = float(forward_throttle)
@@ -40,6 +41,7 @@ class StaringProfile(HeadTrackingMixin, BaseControlProfile):
             latency_compensation_cap_frac=latency_compensation_cap_frac,
             gyro_compensation_gain=gyro_compensation_gain,
             gyro_compensation_neck_max_deg_fallback=gyro_compensation_neck_max_deg_fallback,
+            stable_track_frames=stable_track_frames,
             vision_service=vision_service,
         )
 

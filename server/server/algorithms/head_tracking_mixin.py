@@ -25,6 +25,7 @@ class HeadTrackingMixin:
         latency_compensation_cap_frac: float,
         gyro_compensation_gain: float,
         gyro_compensation_neck_max_deg_fallback: float,
+        stable_track_frames: int = 10,
         vision_service: VisionService,
     ) -> None:
         self._friend_db = FriendDB(friend_embeddings_db)
@@ -37,6 +38,7 @@ class HeadTrackingMixin:
         self._latency_compensation_cap_frac = float(latency_compensation_cap_frac)
         self._gyro_compensation_gain = float(gyro_compensation_gain)
         self._gyro_compensation_neck_max_deg_fallback = float(gyro_compensation_neck_max_deg_fallback)
+        self._stable_track_frames = max(1, int(stable_track_frames))
         self._vision = vision_service
 
         self._head_pan = 0.0
@@ -49,6 +51,8 @@ class HeadTrackingMixin:
         self._last_target_cx: float | None = None
         self._last_target_cy: float | None = None
         self._last_target_time: float | None = None
+        self._track_presence_history: list[set[int]] = []
+        self._track_presence_last_frame_id: int | None = None
 
     @staticmethod
     def _bbox_area(bbox: list[float]) -> float:
@@ -185,33 +189,54 @@ class HeadTrackingMixin:
         delta_pan = -input_state.telemetry.imu_yaw_rate * dt * self._gyro_compensation_gain / neck_range_rad
         self._head_pan = max(-1.0, min(1.0, self._head_pan + delta_pan))
 
+    def _update_track_presence(self, persons: list[dict], vision_frame_id: int) -> None:
+        if self._track_presence_last_frame_id == vision_frame_id:
+            return
+        present = {int(person["track_id"]) for person in persons}
+        self._track_presence_history.append(present)
+        if len(self._track_presence_history) > self._stable_track_frames:
+            self._track_presence_history = self._track_presence_history[-self._stable_track_frames :]
+        self._track_presence_last_frame_id = vision_frame_id
+
+    def _track_is_stable_candidate(self, track_id: int) -> bool:
+        if self._tracking_track_id is not None and int(track_id) == int(self._tracking_track_id):
+            return True
+        if len(self._track_presence_history) < self._stable_track_frames:
+            return False
+        return all(int(track_id) in frame_tracks for frame_tracks in self._track_presence_history[-self._stable_track_frames :])
+
     def update_tracking(self, context: AlgorithmContext, input_state: InputState, *, allow_first_face_fallback: bool) -> bool:
         persons = self._vision.get_persons()
+        vision_frame_id = int(self._vision.get_latest_frame_id())
+        self._update_track_presence(persons, vision_frame_id)
 
         overlay: list[dict] = []
         matches: list[tuple[dict, str]] = []
         match_by_track_id: dict[int, str] = {}
         for person in persons:
+            track_id = int(person["track_id"])
+            is_stable = self._track_is_stable_candidate(track_id)
             bbox = [float(v) for v in person["bbox"]]
             x1, y1, x2, y2 = bbox
             embedding = person["face_embedding"]
-            if isinstance(embedding, list) and embedding:
+            if is_stable and isinstance(embedding, list) and embedding:
                 name = self._friend_db.match([float(v) for v in embedding], self._face_match_threshold)
                 if name is not None:
                     matches.append((person, name))
-                    match_by_track_id[int(person["track_id"])] = name
+                    match_by_track_id[track_id] = name
             overlay.append(
                 {
-                    "track_id": int(person["track_id"]),
+                    "track_id": track_id,
                     "bbox": bbox,
                     "keypoints": [[float(v) for v in kp] for kp in person["keypoints"]],
                     "head_yaw_deg": float(person["head_yaw_deg"]),
                     "face_visible": bool(person["face_visible"]),
                     "confidence": float(person["confidence"]),
+                    "track_is_stable_candidate": is_stable,
                     "head_center": [0.5 * (x1 + x2), y1],
                     "matched_name": (
-                        match_by_track_id[int(person["track_id"])]
-                        if int(person["track_id"]) in match_by_track_id
+                        match_by_track_id[track_id]
+                        if track_id in match_by_track_id
                         else None
                     ),
                 }
@@ -239,12 +264,14 @@ class HeadTrackingMixin:
                 "matched_tracks": [int(item[0]["track_id"]) for item in matches],
                 "target_track_id": int(target_person["track_id"]),
                 "target_bbox": list(target_person["bbox"]),
-                "vision_frame_id": self._vision.get_latest_frame_id(),
+                "vision_frame_id": vision_frame_id,
+                "stable_track_frames": self._stable_track_frames,
             }
             return True
 
-        if persons and allow_first_face_fallback:
-            target_person = persons[0]
+        stable_persons = [p for p in persons if self._track_is_stable_candidate(int(p["track_id"]))]
+        if stable_persons and allow_first_face_fallback:
+            target_person = stable_persons[0]
             frame_w, frame_h = self._frame_size(input_state.camera_frame)
             cx, cy = self._get_target_point(target_person)
             cx, cy = self._extrapolate_target(
@@ -264,7 +291,8 @@ class HeadTrackingMixin:
                 "matched_tracks": [],
                 "target_track_id": int(target_person["track_id"]),
                 "target_bbox": list(target_person["bbox"]),
-                "vision_frame_id": self._vision.get_latest_frame_id(),
+                "vision_frame_id": vision_frame_id,
+                "stable_track_frames": self._stable_track_frames,
             }
             return True
 
@@ -276,6 +304,7 @@ class HeadTrackingMixin:
         self._last_target_time = None
         self._tracking_debug = {
             "matched_tracks": [],
-            "vision_frame_id": self._vision.get_latest_frame_id(),
+            "vision_frame_id": vision_frame_id,
+            "stable_track_frames": self._stable_track_frames,
         }
         return False

@@ -44,6 +44,7 @@ def test_staring_profile_falls_back_to_manual_when_no_match(tmp_path):
         eye_confidence_threshold=0.3,
         head_tracking_gain=3.0,
         head_tracking_deadzone=0.03,
+        stable_track_frames=1,
         vision_service=vision,
     )
     context = AlgorithmContext(head_sensitivity=-0.002)
@@ -75,6 +76,7 @@ def test_staring_profile_tracks_first_face_when_no_known_match(tmp_path):
         eye_confidence_threshold=0.3,
         head_tracking_gain=3.0,
         head_tracking_deadzone=0.0,
+        stable_track_frames=1,
         vision_service=vision,
     )
     vision.set_persons(
@@ -111,6 +113,7 @@ def test_staring_profile_wasd_works_when_tracking_disabled(tmp_path):
         eye_confidence_threshold=0.3,
         head_tracking_gain=3.0,
         head_tracking_deadzone=0.03,
+        stable_track_frames=1,
         vision_service=vision,
     )
     cmd = profile.tick(
@@ -140,6 +143,7 @@ def test_staring_profile_tracks_best_matching_face(tmp_path):
         eye_confidence_threshold=0.3,
         head_tracking_gain=3.0,
         head_tracking_deadzone=0.0,
+        stable_track_frames=1,
         vision_service=vision,
     )
     vision.set_persons([_person(7, [10, 10, 200, 220], [1.0] * 128)], frame_id=10)
@@ -184,6 +188,7 @@ def test_staring_profile_face_actions_persist_and_remove(tmp_path):
         eye_confidence_threshold=0.3,
         head_tracking_gain=3.0,
         head_tracking_deadzone=0.03,
+        stable_track_frames=1,
         vision_service=vision,
     )
     vision.set_persons([_person(1, [0, 0, 100, 100], [0.7] * 128)])
@@ -193,3 +198,42 @@ def test_staring_profile_face_actions_persist_and_remove(tmp_path):
 
     profile.on_action({"type": "remove_face", "name": "face_1"})
     assert profile.get_ui_state()["known_faces"] == []
+
+
+def test_staring_profile_filters_unstable_tracks_except_current_target(tmp_path):
+    vision = MockVisionService()
+    profile = StaringProfile(
+        forward_throttle=0.3,
+        backward_throttle=-0.15,
+        forward_fast_throttle=0.5,
+        friend_embeddings_db=str(tmp_path / "friends.db"),
+        face_match_threshold=0.5,
+        eye_confidence_threshold=0.3,
+        head_tracking_gain=3.0,
+        head_tracking_deadzone=0.0,
+        stable_track_frames=3,
+        vision_service=vision,
+    )
+    vision.set_persons([_person(1, [40, 50, 160, 260], [1.0] * 128)], frame_id=0)
+    profile.on_action({"type": "add_face", "name": "Kir"})
+
+    for frame_id in (1, 2, 3):
+        vision.set_persons([_person(1, [40, 50, 160, 260], [1.0] * 128)], frame_id=frame_id)
+        profile.tick(
+            AlgorithmContext(head_sensitivity=-0.002),
+            InputState(manual=ManualInputState(tracking_enabled=True), telemetry=TelemetryFrame(), dt=0.1),
+        )
+    assert profile.get_ui_state()["staring_track_id"] == 1
+
+    vision.set_persons(
+        [
+            _person(1, [40, 50, 160, 260], [1.0] * 128),
+            _person(2, [80, 40, 520, 420], [1.0] * 128),
+        ],
+        frame_id=4,
+    )
+    profile.tick(
+        AlgorithmContext(head_sensitivity=-0.002),
+        InputState(manual=ManualInputState(tracking_enabled=True), telemetry=TelemetryFrame(), dt=0.1),
+    )
+    assert profile.get_ui_state()["staring_track_id"] == 1

@@ -41,9 +41,10 @@ profiles:
     latency_compensation_cap_frac: 0.3
     gyro_compensation_gain: 0.0
     gyro_compensation_neck_max_deg_fallback: 135.0
+    stable_track_frames: 10
   silly_following:
     forward_throttle: 0.35
-    backward_throttle: -0.13
+    backward_throttle: -0.15
     friend_embeddings_db: "data/friends.db"
     face_match_threshold: 0.5
     eye_confidence_threshold: 0.3
@@ -61,7 +62,7 @@ profiles:
     front_obstacle_distance_m: 0.15
     side_obstacle_distance_m: 0.3
     rear_clear_distance_m: 0.3
-    side_steering_nudge: 0.5
+    side_steering_nudge: -1.5
     reverse_timeout_sec: 1.5
     reverse_steering_multiplier: -1.0
     forward_speed_steering_reduction_gain: 0.4
@@ -72,14 +73,15 @@ profiles:
     front_sector_half_angle_deg: 30.0
     side_sector_outer_angle_deg: 120.0
     rear_sector_start_angle_deg: 170.0
-    search_timeout_sec: 3.0
-    search_head_speed_axis_per_sec: 0.7
-    search_dwell_sec: 1.0
-    search_min_target_delta_axis: 0.3
+    search_timeout_sec: 1.5
+    search_head_speed_axis_per_sec: 0.9
+    search_dwell_sec: 0.5
+    search_min_target_delta_axis: 0.5
     search_pan_min_deg: -135.0
     search_pan_max_deg: 135.0
     search_tilt_min_axis: 0.0
     search_tilt_max_axis: 0.55
+    stable_track_frames: 10
 
 network:
   grafana_url: ""

@@ -63,6 +63,7 @@ class SillyFollowingProfile(HeadTrackingMixin, BaseControlProfile):
         search_pan_max_deg: float | None = None,
         search_tilt_min_axis: float = -1.0,
         search_tilt_max_axis: float = 1.0,
+        stable_track_frames: int = 10,
         vision_service: VisionService,
     ) -> None:
         self._forward_throttle = float(forward_throttle)
@@ -109,6 +110,7 @@ class SillyFollowingProfile(HeadTrackingMixin, BaseControlProfile):
             latency_compensation_cap_frac=latency_compensation_cap_frac,
             gyro_compensation_gain=gyro_compensation_gain,
             gyro_compensation_neck_max_deg_fallback=gyro_compensation_neck_max_deg_fallback,
+            stable_track_frames=stable_track_frames,
             vision_service=vision_service,
         )
         self._state = "idle"
