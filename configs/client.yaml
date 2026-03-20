@@ -46,7 +46,7 @@ diagnostics:
 network:
   server_hosts:
     - "192.168.31.70"
-    - "10.147.4.153"
+    - "10.147.4.223"
   telemetry_port: 5550
   command_port: 5552
   report_port: 5553
