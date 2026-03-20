@@ -10,6 +10,8 @@ def test_controller_mode_switch(runtime):
     assert controller.active_mode == ControlMode.TELEOP_SLAM
     controller.set_mode("autonomy_profile_1")
     assert controller.active_mode == ControlMode.AUTONOMY_PROFILE_1
+    controller.set_mode("silly_following")
+    assert controller.active_mode == ControlMode.SILLY_FOLLOWING
 
 
 def test_controller_tick_sends_command(runtime):

@@ -57,6 +57,7 @@ _CLIENT_MODE_TO_SERVER = {
     "teleop_slam": ControlMode.TELEOP_SLAM,
     "autonomy_profile_1": ControlMode.AUTONOMY_PROFILE_1,
     "staring": ControlMode.STARING,
+    "silly_following": ControlMode.SILLY_FOLLOWING,
 }
 
 

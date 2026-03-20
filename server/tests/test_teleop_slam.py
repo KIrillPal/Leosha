@@ -25,6 +25,7 @@ def _profiles_cfg(cfg):
         "autonomy_profile_1": cfg.profiles.autonomy_profile_1,
         "following": cfg.profiles.following,
         "staring": cfg.profiles.staring,
+        "silly_following": cfg.profiles.silly_following,
     }
 
 
@@ -35,7 +36,7 @@ def test_teleop_slam_mode_available():
     context = AlgorithmContext(head_sensitivity=cfg.control.head_sensitivity)
     slam = SlamService(robot)
     controller = ControllerService(robot, context=context, slam_service=slam, profiles_config=_profiles_cfg(cfg))
-    assert ControlMode.TELEOP_SLAM in controller.modes
+    assert ControlMode.TELEOP_SLAM.value in controller.modes
     controller.set_mode("teleop_slam")
     assert controller.active_mode == ControlMode.TELEOP_SLAM
 

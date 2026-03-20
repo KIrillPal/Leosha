@@ -10,6 +10,7 @@ class OperatingMode(str, Enum):
     TELEOP_SLAM = "teleop_slam"
     AUTONOMY_PROFILE_1 = "autonomy_profile_1"
     STARING = "staring"
+    SILLY_FOLLOWING = "silly_following"
 
 
 class RobotStatus(str, Enum):

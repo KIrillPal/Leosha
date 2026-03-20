@@ -11,6 +11,7 @@ from ..algorithms import (
     AutonomyProfile1,
     FollowingProfile,
     PauseProfile,
+    SillyFollowingProfile,
     StaringProfile,
     TeleoperationProfile,
     TeleopSlamProfile,
@@ -68,6 +69,7 @@ class ControllerService:
         teleop_slam_cfg = dict(profiles_config["teleop_slam"])
         autonomy_cfg = dict(profiles_config["autonomy_profile_1"])
         staring_cfg = dict(profiles_config["staring"])
+        silly_following_cfg = dict(profiles_config["silly_following"])
         # Following skeleton can be configured but intentionally not mounted as active
         # control mode yet (shares autonomy slot in current protocol).
         self._following_profile = FollowingProfile(**dict(profiles_config["following"]))
@@ -81,6 +83,10 @@ class ControllerService:
             ControlMode.TELEOP_SLAM: TeleopSlamProfile(**teleop_slam_cfg),
             ControlMode.AUTONOMY_PROFILE_1: AutonomyProfile1(**autonomy_cfg),
             ControlMode.STARING: StaringProfile(vision_service=self._vision_service, **staring_cfg),
+            ControlMode.SILLY_FOLLOWING: SillyFollowingProfile(
+                vision_service=self._vision_service,
+                **silly_following_cfg,
+            ),
         }
 
     @property

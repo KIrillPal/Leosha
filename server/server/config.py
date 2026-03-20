@@ -39,6 +39,7 @@ class ProfilesSection:
     autonomy_profile_1: dict[str, Any]
     following: dict[str, Any]
     staring: dict[str, Any]
+    silly_following: dict[str, Any]
 
 
 @dataclass

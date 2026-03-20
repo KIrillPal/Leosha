@@ -65,6 +65,7 @@ def build_runtime(config_path: str, transport: str = ""):
             "autonomy_profile_1": cfg.profiles.autonomy_profile_1,
             "following": cfg.profiles.following,
             "staring": cfg.profiles.staring,
+            "silly_following": cfg.profiles.silly_following,
         },
     )
     app = create_app(controller, robot, cfg, slam_service=slam_service, ros_graph=ros_graph)

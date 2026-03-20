@@ -5,6 +5,7 @@ from .profiles import (
     BaseControlProfile,
     FollowingProfile,
     PauseProfile,
+    SillyFollowingProfile,
     StaringProfile,
     TeleoperationProfile,
     TeleopSlamProfile,
@@ -16,6 +17,7 @@ __all__ = [
     "TeleoperationProfile",
     "TeleopSlamProfile",
     "StaringProfile",
+    "SillyFollowingProfile",
     "AutonomyProfile1",
     "FollowingProfile",
 ]

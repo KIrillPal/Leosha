@@ -40,6 +40,7 @@ def _profiles_cfg(cfg):
         "autonomy_profile_1": cfg.profiles.autonomy_profile_1,
         "following": cfg.profiles.following,
         "staring": cfg.profiles.staring,
+        "silly_following": cfg.profiles.silly_following,
     }
 
 
