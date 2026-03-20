@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import random
 
 from server.algorithms.silly_following_profile import SillyFollowingProfile
 from server.interfaces import AlgorithmContext, InputState
@@ -94,6 +95,14 @@ def _build_profile(tmp_path, vision: MockVisionService) -> SillyFollowingProfile
         front_sector_half_angle_deg=30.0,
         side_sector_outer_angle_deg=90.0,
         rear_sector_start_angle_deg=150.0,
+        search_timeout_sec=3.0,
+        search_head_speed_axis_per_sec=0.35,
+        search_dwell_sec=1.0,
+        search_min_target_delta_axis=0.25,
+        search_pan_min_deg=-135.0,
+        search_pan_max_deg=135.0,
+        search_tilt_min_axis=-1.0,
+        search_tilt_max_axis=1.0,
         vision_service=vision,
     )
 
@@ -222,3 +231,78 @@ def test_silly_following_applies_side_nudge(tmp_path):
     )
     assert cmd.speed > 0.0
     assert cmd.steering > 0.0
+
+
+def test_silly_following_enters_searching_and_moves_head_after_timeout(tmp_path):
+    vision = MockVisionService()
+    profile = SillyFollowingProfile(
+        forward_throttle=0.25,
+        backward_throttle=-0.13,
+        friend_embeddings_db=str(tmp_path / "friends.db"),
+        face_match_threshold=0.5,
+        eye_confidence_threshold=0.3,
+        head_tracking_gain=1.8,
+        head_tracking_deadzone=0.05,
+        bbox_target_x_frac=0.5,
+        bbox_target_y_frac=0.1,
+        latency_compensation_cap_frac=0.3,
+        gyro_compensation_gain=1.0,
+        gyro_compensation_neck_max_deg_fallback=135.0,
+        steering_gain=1.0,
+        steering_deadzone=0.03,
+        steering_yaw_damping_gain=0.2,
+        steering_yaw_damping_min=0.55,
+        front_obstacle_distance_m=0.35,
+        side_obstacle_distance_m=0.25,
+        rear_clear_distance_m=0.3,
+        side_steering_nudge=0.25,
+        reverse_timeout_sec=1.5,
+        reverse_steering_multiplier=-1.0,
+        forward_speed_steering_reduction_gain=0.4,
+        forward_speed_min_factor=0.5,
+        stop_head_tilt_deg=30.0,
+        head_tilt_deg_fallback_scale=75.0,
+        stop_without_lidar=True,
+        front_sector_half_angle_deg=30.0,
+        side_sector_outer_angle_deg=90.0,
+        rear_sector_start_angle_deg=150.0,
+        search_timeout_sec=0.2,
+        search_head_speed_axis_per_sec=0.5,
+        search_dwell_sec=0.05,
+        search_min_target_delta_axis=0.1,
+        search_pan_min_deg=40.0,
+        search_pan_max_deg=60.0,
+        search_tilt_min_axis=-0.6,
+        search_tilt_max_axis=-0.4,
+        vision_service=vision,
+    )
+
+    random.seed(7)
+
+    # No face in frame -> after timeout profile starts scanning.
+    first = profile.tick(
+        AlgorithmContext(head_sensitivity=-0.002),
+        InputState(
+            manual=ManualInputState(tracking_enabled=True),
+            telemetry=TelemetryFrame(),
+            lidar_scan=_scan(front=2.0, left=2.0, right=2.0, rear=2.0),
+            dt=0.1,
+            timestamp=1.0,
+        ),
+    )
+    assert first.speed == 0.0
+    assert profile.get_ui_state()["follow_state"] == "idle"
+
+    second = profile.tick(
+        AlgorithmContext(head_sensitivity=-0.002),
+        InputState(
+            manual=ManualInputState(tracking_enabled=True),
+            telemetry=TelemetryFrame(),
+            lidar_scan=_scan(front=2.0, left=2.0, right=2.0, rear=2.0),
+            dt=0.2,
+            timestamp=1.21,
+        ),
+    )
+    assert second.speed == 0.0
+    assert profile.get_ui_state()["follow_state"] == "searching"
+    assert profile._head_pan != 0.0 or profile._head_tilt != 0.0

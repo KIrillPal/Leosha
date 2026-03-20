@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import random
 from dataclasses import dataclass
 
 from ..interfaces import AlgorithmContext, InputState
@@ -54,6 +55,14 @@ class SillyFollowingProfile(HeadTrackingMixin, BaseControlProfile):
         front_sector_half_angle_deg: float,
         side_sector_outer_angle_deg: float,
         rear_sector_start_angle_deg: float,
+        search_timeout_sec: float = 3.0,
+        search_head_speed_axis_per_sec: float = 0.35,
+        search_dwell_sec: float = 1.0,
+        search_min_target_delta_axis: float = 0.25,
+        search_pan_min_deg: float | None = None,
+        search_pan_max_deg: float | None = None,
+        search_tilt_min_axis: float = -1.0,
+        search_tilt_max_axis: float = 1.0,
         vision_service: VisionService,
     ) -> None:
         self._forward_throttle = float(forward_throttle)
@@ -76,6 +85,19 @@ class SillyFollowingProfile(HeadTrackingMixin, BaseControlProfile):
         self._front_sector_half_angle_deg = float(front_sector_half_angle_deg)
         self._side_sector_outer_angle_deg = float(side_sector_outer_angle_deg)
         self._rear_sector_start_angle_deg = float(rear_sector_start_angle_deg)
+        self._search_timeout_sec = max(0.0, float(search_timeout_sec))
+        self._search_head_speed_axis_per_sec = max(1e-3, float(search_head_speed_axis_per_sec))
+        self._search_dwell_sec = max(0.0, float(search_dwell_sec))
+        self._search_min_target_delta_axis = max(0.0, float(search_min_target_delta_axis))
+        self._search_pan_min_deg = float(search_pan_min_deg) if search_pan_min_deg is not None else None
+        self._search_pan_max_deg = float(search_pan_max_deg) if search_pan_max_deg is not None else None
+        self._search_tilt_min_axis = max(-1.0, min(1.0, float(search_tilt_min_axis)))
+        self._search_tilt_max_axis = max(-1.0, min(1.0, float(search_tilt_max_axis)))
+        if self._search_tilt_min_axis > self._search_tilt_max_axis:
+            self._search_tilt_min_axis, self._search_tilt_max_axis = (
+                self._search_tilt_max_axis,
+                self._search_tilt_min_axis,
+            )
         self._init_head_tracking(
             friend_embeddings_db=friend_embeddings_db,
             face_match_threshold=face_match_threshold,
@@ -99,6 +121,12 @@ class SillyFollowingProfile(HeadTrackingMixin, BaseControlProfile):
         )
         self._last_speed = 0.0
         self._last_steering = 0.0
+        self._search_lost_since: float | None = None
+        self._search_target_pan_deg: float | None = None
+        self._search_target_tilt: float | None = None
+        self._search_prev_pan_deg: float | None = None
+        self._search_prev_tilt: float | None = None
+        self._search_dwell_until: float = 0.0
 
     @property
     def mode(self) -> ControlMode:
@@ -181,6 +209,114 @@ class SillyFollowingProfile(HeadTrackingMixin, BaseControlProfile):
         self._state = "reversing"
         self._reverse_started_at = now
 
+    def _reset_search(self) -> None:
+        self._search_lost_since = None
+        self._search_target_pan_deg = None
+        self._search_target_tilt = None
+        self._search_prev_pan_deg = None
+        self._search_prev_tilt = None
+        self._search_dwell_until = 0.0
+
+    def _head_pan_limits_deg(self, input_state: InputState) -> tuple[float, float]:
+        cfg = input_state.robot_config
+        if (
+            cfg is not None
+            and "robot_geometry" in cfg
+            and "head" in cfg["robot_geometry"]
+            and "neck_min_deg" in cfg["robot_geometry"]["head"]
+            and "neck_max_deg" in cfg["robot_geometry"]["head"]
+        ):
+            min_deg = float(cfg["robot_geometry"]["head"]["neck_min_deg"])
+            max_deg = float(cfg["robot_geometry"]["head"]["neck_max_deg"])
+        else:
+            max_deg = float(self._gyro_compensation_neck_max_deg_fallback)
+            min_deg = -max_deg
+        if min_deg > max_deg:
+            min_deg, max_deg = max_deg, min_deg
+        return min_deg, max_deg
+
+    def _pan_axis_to_deg(self, pan_axis: float, input_state: InputState) -> float:
+        min_deg, max_deg = self._head_pan_limits_deg(input_state)
+        axis = max(-1.0, min(1.0, pan_axis))
+        if axis >= 0.0:
+            return axis * max_deg
+        return axis * abs(min_deg)
+
+    def _pan_deg_to_axis(self, pan_deg: float, input_state: InputState) -> float:
+        min_deg, max_deg = self._head_pan_limits_deg(input_state)
+        if pan_deg >= 0.0:
+            denom = max(1e-6, max_deg)
+            return max(-1.0, min(1.0, pan_deg / denom))
+        denom = max(1e-6, abs(min_deg))
+        return max(-1.0, min(1.0, pan_deg / denom))
+
+    def _search_pan_range_deg(self, input_state: InputState) -> tuple[float, float]:
+        hw_min, hw_max = self._head_pan_limits_deg(input_state)
+        cfg_min = hw_min if self._search_pan_min_deg is None else self._search_pan_min_deg
+        cfg_max = hw_max if self._search_pan_max_deg is None else self._search_pan_max_deg
+        pan_min = max(hw_min, min(hw_max, cfg_min))
+        pan_max = max(hw_min, min(hw_max, cfg_max))
+        if pan_min > pan_max:
+            pan_min, pan_max = pan_max, pan_min
+        return pan_min, pan_max
+
+    def _search_pick_next_target(self, input_state: InputState) -> tuple[float, float]:
+        pan_min_deg, pan_max_deg = self._search_pan_range_deg(input_state)
+        prev_pan = self._search_prev_pan_deg
+        prev_tilt = self._search_prev_tilt
+        if prev_pan is None or prev_tilt is None:
+            return (
+                random.uniform(pan_min_deg, pan_max_deg),
+                random.uniform(self._search_tilt_min_axis, self._search_tilt_max_axis),
+            )
+        max_attempts = 16
+        candidate = (prev_pan, prev_tilt)
+        for _ in range(max_attempts):
+            pan = random.uniform(pan_min_deg, pan_max_deg)
+            tilt = random.uniform(self._search_tilt_min_axis, self._search_tilt_max_axis)
+            pan_delta_axis = abs(self._pan_deg_to_axis(pan, input_state) - self._pan_deg_to_axis(prev_pan, input_state))
+            if math.hypot(pan_delta_axis, tilt - prev_tilt) >= self._search_min_target_delta_axis:
+                return (pan, tilt)
+            candidate = (pan, tilt)
+        # If range is too small for the requested delta, still continue with the best found sample.
+        return candidate
+
+    def _move_axis_towards(self, current: float, target: float, max_step: float) -> tuple[float, bool]:
+        delta = target - current
+        if abs(delta) <= max_step:
+            return target, True
+        step = max_step if delta > 0.0 else -max_step
+        return current + step, False
+
+    def _run_searching_head_motion(self, input_state: InputState) -> None:
+        now = input_state.timestamp
+        if self._search_target_pan_deg is None or self._search_target_tilt is None:
+            self._search_target_pan_deg, self._search_target_tilt = self._search_pick_next_target(input_state)
+
+        if self._search_dwell_until > now:
+            return
+
+        max_step = self._search_head_speed_axis_per_sec * max(0.0, input_state.dt)
+        target_pan_axis = self._pan_deg_to_axis(self._search_target_pan_deg, input_state)
+        next_pan, reached_pan = self._move_axis_towards(
+            self._head_pan,
+            target_pan_axis,
+            max_step,
+        )
+        next_tilt, reached_tilt = self._move_axis_towards(
+            self._head_tilt,
+            self._search_target_tilt,
+            max_step,
+        )
+        self._head_pan = max(-1.0, min(1.0, next_pan))
+        self._head_tilt = max(-1.0, min(1.0, next_tilt))
+        if reached_pan and reached_tilt:
+            self._search_prev_pan_deg = self._search_target_pan_deg
+            self._search_prev_tilt = self._search_target_tilt
+            self._search_target_pan_deg = None
+            self._search_target_tilt = None
+            self._search_dwell_until = now + self._search_dwell_sec
+
     def tick(self, context: AlgorithmContext, input_state: InputState) -> ControlCommand:
         self._compensate_head_for_body_yaw(input_state)
         has_target = False
@@ -188,18 +324,32 @@ class SillyFollowingProfile(HeadTrackingMixin, BaseControlProfile):
             has_target = self.update_tracking(context, input_state, allow_first_face_fallback=True)
             if not has_target:
                 self._manual_head(context, input_state.manual)
+            else:
+                self._reset_search()
         else:
             self._state = "idle"
             self._tracking_state = "manual"
             self._tracking_target = None
             self._tracking_track_id = None
+            self._reset_search()
 
         sectors = self._analyze_lidar(input_state.lidar_scan)
         self._last_sectors = sectors
         tilt_deg = self._tilt_axis_to_deg(input_state)
 
         if not input_state.manual.tracking_enabled or not has_target:
-            self._state = "idle"
+            if input_state.manual.tracking_enabled:
+                now = input_state.timestamp
+                if self._search_lost_since is None:
+                    self._search_lost_since = now
+                lost_for = max(0.0, now - self._search_lost_since)
+                if lost_for >= self._search_timeout_sec:
+                    self._state = "searching"
+                    self._run_searching_head_motion(input_state)
+                else:
+                    self._state = "idle"
+            else:
+                self._state = "idle"
             self._last_speed = 0.0
             self._last_steering = 0.0
             return ControlCommand(
@@ -306,6 +456,7 @@ class SillyFollowingProfile(HeadTrackingMixin, BaseControlProfile):
         self._last_speed = 0.0
         self._last_steering = 0.0
         self._reverse_started_at = 0.0
+        self._reset_search()
 
     def post_tick(self, input_state: InputState) -> None:
         input_state.manual.head_dx = 0.0

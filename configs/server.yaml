@@ -43,7 +43,7 @@ profiles:
     gyro_compensation_neck_max_deg_fallback: 135.0
   silly_following:
     forward_throttle: 0.35
-    backward_throttle: -0.25
+    backward_throttle: -0.13
     friend_embeddings_db: "data/friends.db"
     face_match_threshold: 0.5
     eye_confidence_threshold: 0.3
@@ -72,6 +72,14 @@ profiles:
     front_sector_half_angle_deg: 30.0
     side_sector_outer_angle_deg: 120.0
     rear_sector_start_angle_deg: 170.0
+    search_timeout_sec: 3.0
+    search_head_speed_axis_per_sec: 0.7
+    search_dwell_sec: 1.0
+    search_min_target_delta_axis: 0.3
+    search_pan_min_deg: -135.0
+    search_pan_max_deg: 135.0
+    search_tilt_min_axis: 0.0
+    search_tilt_max_axis: 0.55
 
 network:
   grafana_url: ""
