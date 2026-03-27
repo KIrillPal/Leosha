@@ -19,6 +19,11 @@
         .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
         .metric { font-size: 20px; font-weight: 700; }
         .hint { color: #6b7280; font-size: 13px; }
+        @media (max-width: 900px) {
+            .tabs { overflow-x: auto; white-space: nowrap; }
+            .tab.hide-mobile { display: none; }
+            .content { padding: 10px; }
+        }
     </style>
 </head>
 <body>
@@ -26,10 +31,10 @@
 <div class="tabs">
     <a class="tab {% if active_tab == 'settings' %}active{% endif %}" href="/settings">Настройки</a>
     <a class="tab {% if active_tab == 'teleop' %}active{% endif %}" href="/teleop">Телеуправление</a>
-    <a class="tab {% if active_tab == 'network' %}active{% endif %}" href="/network">Сеть</a>
     <a class="tab {% if active_tab == 'lidar' %}active{% endif %}" href="/lidar">LiDAR</a>
-    <a class="tab {% if active_tab == 'slam' %}active{% endif %}" href="/slam">SLAM</a>
-    <a class="tab {% if active_tab == 'ros_graph' %}active{% endif %}" href="/ros-graph">ROS Graph</a>
+    <a class="tab hide-mobile {% if active_tab == 'network' %}active{% endif %}" href="/network">Сеть</a>
+    <a class="tab hide-mobile {% if active_tab == 'slam' %}active{% endif %}" href="/slam">SLAM</a>
+    <a class="tab hide-mobile {% if active_tab == 'ros_graph' %}active{% endif %}" href="/ros-graph">ROS Graph</a>
 </div>
 <div class="content">{% block content %}{% endblock %}</div>
 </body>

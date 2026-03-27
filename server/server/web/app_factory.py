@@ -74,13 +74,27 @@ def create_app(
     @app.get("/api/settings")
     def get_settings():
         status = robot_client.get_status()
+        tuning = controller.get_silly_following_tuning()
         return jsonify({
             "ip": status.ip,
             "connected": status.connected,
             "last_ping_ms": status.last_ping_ms,
             "mode": controller.active_mode.value,
             "available_modes": controller.modes,
+            "silly_following": tuning,
+            "tracking_enabled": controller.get_ui_status().get("tracking_enabled", False),
         })
+
+    @app.post("/api/settings/silly-following")
+    def set_silly_following_settings():
+        data = _require_json()
+        tuning = controller.set_silly_following_tuning(
+            forward_throttle=float(data["forward_throttle"]),
+            backward_throttle=float(data["backward_throttle"]),
+            eye_confidence_threshold=float(data["eye_confidence_threshold"]),
+        )
+        controller.tick_once()
+        return jsonify({"success": True, "silly_following": tuning})
 
     @app.post("/api/settings/ip")
     def set_robot_ip():

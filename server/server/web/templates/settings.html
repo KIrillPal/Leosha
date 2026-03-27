@@ -1,6 +1,14 @@
 {% extends "base.html" %}
 {% block title %}Настройки{% endblock %}
 {% block content %}
+<style>
+    .tracking-btn { background: #28a745; }
+    .tracking-btn.active { background: #dc3545; }
+    .num-row { display: grid; grid-template-columns: 190px auto; align-items: center; gap: 10px; margin: 10px 0; }
+    .num-control { display: inline-flex; align-items: center; gap: 8px; }
+    .num-control button { width: 34px; height: 34px; padding: 0; font-size: 18px; line-height: 1; }
+    .num-control input { width: 110px; text-align: center; }
+</style>
 <div class="grid">
     <div class="card">
         <label for="ipInput">IP адрес робота</label>
@@ -22,8 +30,136 @@
         <div style="margin-top:10px;"><button onclick="setMode()">Применить режим</button></div>
         <p class="hint" id="modeStatus">Текущий режим: -</p>
     </div>
+    <div class="card">
+        <label>Параметры Silly Following (применяются сразу)</label>
+        <div class="num-row">
+            <span>forward_throttle</span>
+            <div class="num-control" data-key="forward_throttle">
+                <button type="button" class="secondary" data-delta="-0.01">-</button>
+                <input id="forwardThrottleInput" type="number" step="0.01">
+                <button type="button" data-delta="0.01">+</button>
+            </div>
+        </div>
+        <div class="num-row">
+            <span>backward_throttle</span>
+            <div class="num-control" data-key="backward_throttle">
+                <button type="button" class="secondary" data-delta="-0.01">-</button>
+                <input id="backwardThrottleInput" type="number" step="0.01">
+                <button type="button" data-delta="0.01">+</button>
+            </div>
+        </div>
+        <div class="num-row">
+            <span>eye_confidence_threshold</span>
+            <div class="num-control" data-key="eye_confidence_threshold">
+                <button type="button" class="secondary" data-delta="-0.01">-</button>
+                <input id="eyeConfidenceInput" type="number" step="0.01">
+                <button type="button" data-delta="0.01">+</button>
+            </div>
+        </div>
+        <p class="hint" id="sillyStatus">Silly-following tuning: -</p>
+        <div style="margin-top:10px;">
+            <button id="settingsTrackingBtn" class="tracking-btn" onclick="toggleSettingsControl()">Enable Control</button>
+            <span class="hint" id="settingsControlStatus">Disabled</span>
+        </div>
+    </div>
 </div>
 <script>
+let applyTimer=null;
+let settingsControlEnabled=false;
+const forwardThrottleInput=document.getElementById('forwardThrottleInput');
+const backwardThrottleInput=document.getElementById('backwardThrottleInput');
+const eyeConfidenceInput=document.getElementById('eyeConfidenceInput');
+const sillyStatus=document.getElementById('sillyStatus');
+const settingsTrackingBtn=document.getElementById('settingsTrackingBtn');
+const settingsControlStatus=document.getElementById('settingsControlStatus');
+const setTracking=(tracking)=>fetch('/api/tracking',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tracking})});
+
+const round2=(value)=>Math.round(value*100)/100;
+const readTuning=()=>({
+    forward_throttle:Number(forwardThrottleInput.value),
+    backward_throttle:Number(backwardThrottleInput.value),
+    eye_confidence_threshold:Number(eyeConfidenceInput.value),
+});
+function setTuningInputs(t){
+    forwardThrottleInput.value=Number(t.forward_throttle).toFixed(2);
+    backwardThrottleInput.value=Number(t.backward_throttle).toFixed(2);
+    eyeConfidenceInput.value=Number(t.eye_confidence_threshold).toFixed(2);
+}
+async function applySillyFollowingTuning(){
+    const t=readTuning();
+    if(!Number.isFinite(t.forward_throttle)||!Number.isFinite(t.backward_throttle)||!Number.isFinite(t.eye_confidence_threshold)) return;
+    const r=await fetch('/api/settings/silly-following',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify(t),
+    });
+    const d=await r.json();
+    if(!d.success){alert(d.error||'Ошибка применения параметров');return;}
+    setTuningInputs(d.silly_following);
+    sillyStatus.textContent=`Silly-following tuning: fwd=${Number(d.silly_following.forward_throttle).toFixed(2)} back=${Number(d.silly_following.backward_throttle).toFixed(2)} eye=${Number(d.silly_following.eye_confidence_threshold).toFixed(2)}`;
+}
+function scheduleApply(){
+    if(applyTimer)clearTimeout(applyTimer);
+    applyTimer=setTimeout(()=>{applySillyFollowingTuning();},80);
+}
+function updateTrackingButtonUI(){
+    settingsTrackingBtn.textContent=settingsControlEnabled?'Disable Control':'Enable Control';
+    settingsTrackingBtn.classList.toggle('active',settingsControlEnabled);
+    settingsControlStatus.textContent=settingsControlEnabled?'Enabled':'Disabled';
+    settingsControlStatus.style.color=settingsControlEnabled?'green':'red';
+}
+async function enableSettingsControl(){
+    const st=await (await fetch('/api/status')).json();
+    const cur=st.mode||'';
+    if(cur!=='teleop_slam'&&cur!=='teleoperation'&&cur!=='staring'&&cur!=='silly_following'){
+        await fetch('/api/mode',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mode:'teleoperation'})});
+    }
+    await setTracking(true);
+    settingsControlEnabled=true;
+    updateTrackingButtonUI();
+}
+async function disableSettingsControl(){
+    await fetch('/api/car/stop',{method:'POST'});
+    await setTracking(false);
+    settingsControlEnabled=false;
+    updateTrackingButtonUI();
+}
+async function toggleSettingsControl(){settingsControlEnabled?await disableSettingsControl():await enableSettingsControl();}
+
+function bindStepControl(control){
+    const input=control.querySelector('input');
+    const [minusBtn,plusBtn]=control.querySelectorAll('button');
+    const applyDelta=(delta)=>{
+        const base=Number(input.value);
+        const value=Number.isFinite(base)?base:0;
+        input.value=round2(value+delta).toFixed(2);
+        scheduleApply();
+    };
+    const bindHold=(button)=>{
+        let intervalId=null;
+        let timeoutId=null;
+        const delta=Number(button.dataset.delta);
+        const stop=()=>{
+            if(timeoutId!==null)clearTimeout(timeoutId);
+            if(intervalId!==null)clearInterval(intervalId);
+            timeoutId=null;
+            intervalId=null;
+        };
+        const start=(e)=>{
+            e.preventDefault();
+            applyDelta(delta);
+            timeoutId=setTimeout(()=>{intervalId=setInterval(()=>applyDelta(delta),60);},280);
+        };
+        button.addEventListener('mousedown',start);
+        button.addEventListener('touchstart',start,{passive:false});
+        ['mouseup','mouseleave','touchend','touchcancel'].forEach(evt=>button.addEventListener(evt,stop));
+    };
+    bindHold(minusBtn);
+    bindHold(plusBtn);
+    input.addEventListener('input',scheduleApply);
+    input.addEventListener('change',scheduleApply);
+}
+
 async function loadSettings() {
     const data = await (await fetch('/api/settings')).json();
     ipInput.value = data.ip || '';
@@ -32,6 +168,12 @@ async function loadSettings() {
         modeSelect.innerHTML = data.available_modes.map(m => '<option value="' + m + '">' + m + '</option>').join('');
         modeSelect.value = data.mode || data.available_modes[0];
     }
+    if (data.silly_following) {
+        setTuningInputs(data.silly_following);
+        sillyStatus.textContent=`Silly-following tuning: fwd=${Number(data.silly_following.forward_throttle).toFixed(2)} back=${Number(data.silly_following.backward_throttle).toFixed(2)} eye=${Number(data.silly_following.eye_confidence_threshold).toFixed(2)}`;
+    }
+    settingsControlEnabled=Boolean(data.tracking_enabled);
+    updateTrackingButtonUI();
     modeStatus.textContent = `Текущий режим: ${data.mode}`;
     ipStatus.textContent = `Статус: ${data.connected ? 'подключен' : 'нет подключения'}; ping=${data.last_ping_ms ?? '-'} ms`;
 }
@@ -47,6 +189,9 @@ async function setMode() {
     const r = await fetch('/api/mode', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({mode: modeSelect.value})});
     const d = await r.json(); if (!d.success) alert(d.error || 'Ошибка'); await loadSettings();
 }
+bindStepControl(document.querySelector('[data-key="forward_throttle"]'));
+bindStepControl(document.querySelector('[data-key="backward_throttle"]'));
+bindStepControl(document.querySelector('[data-key="eye_confidence_threshold"]'));
 loadSettings();
 </script>
 {% endblock %}

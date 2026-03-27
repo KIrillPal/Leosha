@@ -254,6 +254,27 @@ class ControllerService:
                 "profile_state": ui_state,
             }
 
+    def get_silly_following_tuning(self) -> dict[str, float]:
+        with self._lock:
+            profile = self._profiles[ControlMode.SILLY_FOLLOWING]
+            return {
+                "forward_throttle": float(profile._forward_throttle),
+                "backward_throttle": float(profile._backward_throttle),
+                "eye_confidence_threshold": float(profile._eye_confidence_threshold),
+            }
+
+    def set_silly_following_tuning(self, *, forward_throttle: float, backward_throttle: float, eye_confidence_threshold: float) -> dict[str, float]:
+        with self._lock:
+            profile = self._profiles[ControlMode.SILLY_FOLLOWING]
+            profile._forward_throttle = float(forward_throttle)
+            profile._backward_throttle = float(backward_throttle)
+            profile._eye_confidence_threshold = float(eye_confidence_threshold)
+            return {
+                "forward_throttle": float(profile._forward_throttle),
+                "backward_throttle": float(profile._backward_throttle),
+                "eye_confidence_threshold": float(profile._eye_confidence_threshold),
+            }
+
     def tick_once(self) -> ControlCommand:
         telemetry = self._robot.get_latest_telemetry()
         robot_config = self._robot.get_robot_config()
