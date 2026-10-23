@@ -12,6 +12,7 @@ def test_robot_yaml_loads():
     cfg = load_config(CONFIG)
     assert cfg.network["handshake_port"] == 5551
     assert cfg.client["lidar"]["invert_to_ccw"] is True
+    assert cfg.client["lidar"]["intensity_enabled"] is True
     assert cfg.slam_toolbox["minimum_travel_distance"] == 0.1
     assert "room" in cfg.sim["worlds"]
 

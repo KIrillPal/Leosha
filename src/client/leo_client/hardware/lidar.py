@@ -76,7 +76,7 @@ class Lidar:
         laser.setlidaropt(ydlidar.LidarPropMinAngle, float(cfg["min_angle_deg"]))
         laser.setlidaropt(ydlidar.LidarPropMaxRange, float(cfg["range_max_m"]))
         laser.setlidaropt(ydlidar.LidarPropMinRange, float(cfg["range_min_m"]))
-        laser.setlidaropt(ydlidar.LidarPropIntenstiy, False)
+        laser.setlidaropt(ydlidar.LidarPropIntenstiy, bool(cfg.get("intensity_enabled", True)))
 
     def _build(self, scan_obj) -> Scan:
         cfg = self._cfg

@@ -161,6 +161,7 @@ def _lidar(value, path: str) -> dict:
         "blind_start_deg": _FLOAT,
         "blind_end_deg": _FLOAT,
         "blind_max_m": _FLOAT,
+        "intensity_enabled": _BOOL,
     }
     parsed = _section(_mapping(value, path), spec, path)
     if parsed["num_rays"] < 8:
