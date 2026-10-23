@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LEO2</title>
+  <style>
+    body { margin: 0; font-family: Arial, sans-serif; background: #f3f5f7; color: #222; }
+    .topbar { background: #1f2937; color: white; padding: 10px 16px; }
+    .tabs { display: flex; gap: 8px; padding: 10px 16px; background: #e5e7eb; border-bottom: 1px solid #d1d5db; }
+    .tab { text-decoration: none; color: #111827; background: #f9fafb; border: 1px solid #d1d5db; border-radius: 8px; padding: 8px 12px; }
+    .tab.active { background: #2563eb; color: white; border-color: #2563eb; }
+    .content { padding: 16px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 12px; }
+    .card { background: white; border: 1px solid #e5e7eb; border-radius: 10px; padding: 14px; }
+    .metric { font-size: 20px; font-weight: 700; }
+    .hint { color: #6b7280; font-size: 13px; }
+    h3 { margin: 0 0 10px; }
+    svg { width: 100%; height: auto; display: block; }
+    .node { fill: #ecfdf5; stroke: #16a34a; stroke-width: 1.5; }
+    .stale { fill: #fef2f2; stroke: #dc2626; stroke-width: 1.5; }
+    .name { fill: #111827; font-size: 13px; font-weight: 700; }
+    .fps { fill: #374151; font-size: 12px; }
+    .edge { fill: none; stroke: #64748b; stroke-width: 1.5; }
+    .dashed { stroke-dasharray: 5 4; }
+    .label { fill: #374151; font-size: 11px; }
+    @media (max-width: 900px) {
+      .tabs { overflow-x: auto; }
+      .content { padding: 10px; }
+    }
+  </style>
+</head>
+<body>
+<div class="topbar"><strong>LEO2</strong></div>
+<div class="tabs">
+  <a class="tab" href="http://__WEB_HOST__:__WEB_PORT__/">Settings</a>
+  <a class="tab" href="http://__WEB_HOST__:__WEB_PORT__/teleop">Teleoperation</a>
+  <a class="tab" href="http://__WEB_HOST__:__WEB_PORT__/lidar">LiDAR</a>
+  <a class="tab" href="http://__WEB_HOST__:__WEB_PORT__/slam">SLAM</a>
+  <a class="tab" href="http://__WEB_HOST__:__WEB_PORT__/network">Network</a>
+  <a class="tab active" href="/">Node graph</a>
+</div>
+<div class="content">
+  <div class="grid">
+    <div class="card"><div class="hint">System FPS</div><div class="metric" id="system">–</div></div>
+    <div class="card"><div class="hint">Client loop</div><div class="metric" id="client">–</div></div>
+    <div class="card"><div class="hint">Camera</div><div class="metric" id="camera">–</div></div>
+    <div class="card"><div class="hint">Lidar</div><div class="metric" id="lidar">–</div></div>
+    <div class="card"><div class="hint">Latency ms</div><div class="metric" id="latency">–</div></div>
+  </div>
+  <div class="card">
+    <h3>Node graph</h3>
+    <p class="hint">Green is publishing. Red has gone quiet. The dashed arrow is the slam process, not a topic.</p>
+    <svg id="g" viewBox="0 0 1520 520"></svg>
+  </div>
+</div>
+<script>
+const BOX_W = 168;
+const BOX_H = 56;
+const PLACED = {
+  leo_client: [170, 150],
+  robot_bridge: [470, 150],
+  odometry: [790, 150],
+  slam_toolbox: [1110, 150],
+  web_ui: [1410, 150],
+  vision: [790, 380],
+  mode_manager: [1110, 380],
+  monitor: [470, 400],
+};
+const LINKS = [
+  ["leo_client", "robot_bridge", "telemetry", -28, ""],
+  ["robot_bridge", "leo_client", "commands", 28, ""],
+  ["robot_bridge", "odometry", "/scan /applied", -24, "/scan"],
+  ["odometry", "slam_toolbox", "/odom", -22, "/odom"],
+  ["slam_toolbox", "web_ui", "/map", -22, "/map"],
+  ["robot_bridge", "slam_toolbox", "/scan", -108, "/scan"],
+  ["robot_bridge", "vision", "/camera", 36, "/camera/image/compressed"],
+  ["vision", "mode_manager", "/vision/persons", -20, "/vision/persons"],
+  ["web_ui", "mode_manager", "/teleop/input", -30, "/teleop/input"],
+  ["mode_manager", "web_ui", "/leo/mode", 30, "/leo/mode"],
+  ["mode_manager", "robot_bridge", "/cmd/drive", 110, "/cmd/drive"],
+  ["robot_bridge", "monitor", "/leo/system_stats", -28, "/leo/system_stats"],
+  ["mode_manager", "slam_toolbox", "start / stop", -26, ""],
+];
+
+function box(name) {
+  const [x, y] = PLACED[name];
+  return {x, y, l: x - BOX_W / 2, r: x + BOX_W / 2, t: y - BOX_H / 2, b: y + BOX_H / 2};
+}
+
+function exitPoint(node, other, shift) {
+  const dx = other.x - node.x;
+  const dy = other.y - node.y;
+  if (Math.abs(dx) >= Math.abs(dy)) {
+    const x = dx >= 0 ? node.r : node.l;
+    const y = Math.max(node.t + 12, Math.min(node.b - 12, node.y + shift));
+    return [x, y];
+  }
+  const y = dy >= 0 ? node.b : node.t;
+  const x = Math.max(node.l + 12, Math.min(node.r - 12, node.x + shift));
+  return [x, y];
+}
+
+function curve(a, b, bend) {
+  const shift = bend >= 0 ? 12 : -12;
+  const [x1, y1] = exitPoint(a, b, shift);
+  const [x2, y2] = exitPoint(b, a, shift);
+  const length = Math.hypot(x2 - x1, y2 - y1) || 1;
+  const cx = (x1 + x2) / 2 + (-(y2 - y1) / length) * bend;
+  const cy = (y1 + y2) / 2 + ((x2 - x1) / length) * bend;
+  const lx = 0.25 * x1 + 0.5 * cx + 0.25 * x2;
+  const ly = 0.25 * y1 + 0.5 * cy + 0.25 * y2;
+  return {d: "M " + x1 + " " + y1 + " Q " + cx + " " + cy + " " + x2 + " " + y2, lx, ly};
+}
+
+function rate(edges, source, target, topic) {
+  if (!topic) return "";
+  const hit = edges.find((edge) => edge.source === source && edge.target === target && edge.topic === topic);
+  return hit ? "  " + hit.hz : "";
+}
+
+function nodeOf(view, name) {
+  if (name === "leo_client") {
+    const loop = view.client && view.client.loop;
+    return {fps: loop == null ? null : loop, stale: loop == null};
+  }
+  return (view.nodes || []).find((node) => node.name === name) || {fps: null, stale: true};
+}
+
+function show(id, value) {
+  document.getElementById(id).textContent = value == null || value === "" ? "–" : value;
+}
+
+function draw(view) {
+  const edges = view.edges || [];
+  const paths = LINKS.map(([source, target, label, bend, topic]) => {
+    const path = curve(box(source), box(target), bend);
+    const text = label + rate(edges, source, target, topic);
+    const dashed = label === "start / stop" ? " dashed" : "";
+    const width = Math.max(36, text.length * 6.2);
+    return '<path class="edge' + dashed + '" d="' + path.d + '" marker-end="url(#arrow)"/>'
+      + '<rect x="' + (path.lx - width / 2) + '" y="' + (path.ly - 9) + '" width="' + width + '" height="16" rx="4" fill="white"/>'
+      + '<text class="label" x="' + path.lx + '" y="' + (path.ly + 3) + '" text-anchor="middle">' + text + "</text>";
+  }).join("");
+  const boxes = Object.keys(PLACED).map((name) => {
+    const node = box(name);
+    const state = nodeOf(view, name);
+    const fps = state.fps == null ? "–" : state.fps + " fps";
+    return '<g><rect class="' + (state.stale ? "stale" : "node") + '" x="' + node.l + '" y="' + node.t
+      + '" width="' + BOX_W + '" height="' + BOX_H + '" rx="8"/>'
+      + '<text class="name" x="' + node.x + '" y="' + (node.y - 4) + '" text-anchor="middle">' + name + "</text>"
+      + '<text class="fps" x="' + node.x + '" y="' + (node.y + 14) + '" text-anchor="middle">' + fps + "</text></g>";
+  }).join("");
+  document.getElementById("g").innerHTML = '<defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">'
+    + '<path d="M0,0 L8,3 L0,6 Z" fill="#64748b"/></marker></defs>' + paths + boxes;
+}
+
+async function refresh() {
+  const view = await (await fetch("/api/graph")).json();
+  show("system", view.system_fps);
+  show("client", view.client && view.client.loop);
+  show("camera", view.client && view.client.camera);
+  show("lidar", view.client && view.client.lidar);
+  show("latency", view.latency_ms);
+  draw(view);
+}
+setInterval(refresh, 500);
+refresh();
+</script>
+</body>
+</html>

@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block body %}
+<div class="grid">
+  <div class="card">
+    <h3>Server</h3>
+    <p>System FPS <span class="metric" id="system">–</span></p>
+    <p>Command FPS <span class="metric" id="command">–</span></p>
+    <p>Latency <span class="metric" id="latency">–</span> ms</p>
+  </div>
+  <div class="card">
+    <h3>Client</h3>
+    <p>Loop <span class="metric" id="loop">–</span></p>
+    <p>Camera <span class="metric" id="camera">–</span></p>
+    <p>Lidar <span class="metric" id="lidar">–</span></p>
+  </div>
+  <div class="card">
+    <h3>Session</h3>
+    <p>Mode <span class="metric" id="mode">–</span></p>
+    <p>Robot <span class="metric" id="ip">–</span></p>
+  </div>
+</div>
+<script>
+function show(id, value) {
+  document.getElementById(id).textContent = value === undefined || value === null || value === '' ? '–' : value;
+}
+setInterval(async () => {
+  const data = await (await fetch('/api/status')).json();
+  const stats = data.stats || {};
+  const client = stats.client || {};
+  show('system', stats.system_fps);
+  show('command', stats.command_fps);
+  show('latency', stats.latency_ms);
+  show('loop', client.loop);
+  show('camera', client.camera);
+  show('lidar', client.lidar);
+  show('mode', data.mode);
+  show('ip', data.robot_ip);
+}, 500);
+</script>
+{% endblock %}

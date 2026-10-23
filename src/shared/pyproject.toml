@@ -1,0 +1,15 @@
+[tool.poetry]
+name = "leo-protocol"
+version = "2.0.0"
+description = "ZeroMQ message types shared by the LEO client and server."
+authors = ["LEO <leo@example.com>"]
+packages = [{include = "leo_protocol"}]
+
+[tool.poetry.dependencies]
+python = ">=3.10"
+numpy = ">=1.21,<1.25"
+msgpack = ">=1.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

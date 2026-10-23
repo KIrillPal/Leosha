@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LEO2</title>
+  <style>
+    body { margin: 0; font-family: Arial, sans-serif; background: #f3f5f7; color: #222; }
+    .topbar { background: #1f2937; color: white; padding: 10px 16px; }
+    .tabs { display: flex; gap: 8px; padding: 10px 16px; background: #e5e7eb; border-bottom: 1px solid #d1d5db; }
+    .tab { text-decoration: none; color: #111827; background: #f9fafb; border: 1px solid #d1d5db; border-radius: 8px; padding: 8px 12px; }
+    .tab.active { background: #2563eb; color: white; border-color: #2563eb; }
+    .content { padding: 16px; }
+    .card { background: white; border: 1px solid #e5e7eb; border-radius: 10px; padding: 14px; margin-bottom: 12px; }
+    label { display: block; margin-bottom: 6px; font-weight: 600; }
+    input, select, button { font-size: 14px; padding: 8px 10px; border-radius: 8px; border: 1px solid #cbd5e1; }
+    button { cursor: pointer; background: #2563eb; color: white; border: none; }
+    button.secondary { background: #6b7280; }
+    button.active { background: #1d4ed8; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+    .metric { font-size: 20px; font-weight: 700; }
+    .hint { color: #6b7280; font-size: 13px; }
+    h1, h2, h3 { margin: 0 0 10px; }
+    @media (max-width: 900px) {
+      .tabs { overflow-x: auto; }
+      .content { padding: 10px; }
+    }
+  </style>
+</head>
+<body>
+<div class="topbar"><strong>LEO2</strong></div>
+<div class="tabs">
+  <a class="tab {% if active_tab == 'settings' %}active{% endif %}" href="/">Settings</a>
+  <a class="tab {% if active_tab == 'teleop' %}active{% endif %}" href="/teleop">Teleoperation</a>
+  <a class="tab {% if active_tab == 'lidar' %}active{% endif %}" href="/lidar">LiDAR</a>
+  <a class="tab {% if active_tab == 'slam' %}active{% endif %}" href="/slam">SLAM</a>
+  <a class="tab {% if active_tab == 'network' %}active{% endif %}" href="/network">Network</a>
+  <a class="tab" href="http://{{ request.host.split(':')[0] }}:{{ monitor_port }}/" target="_blank">Node graph</a>
+</div>
+<div class="content">{% block body %}{% endblock %}</div>
+</body>
+</html>

@@ -1,0 +1,301 @@
+# Single configuration for LEO2. Every tunable lives in this file.
+# The server loads it; the robot receives its section at session start.
+
+network:
+  bind_address: "0.0.0.0"
+  # Host the server uses when it connects back to the robot's command socket.
+  robot_ip: "127.0.0.1"
+  telemetry_port: 5550
+  # Session entry port. Must match leo_protocol.HANDSHAKE_PORT.
+  handshake_port: 5551
+  command_port: 5552
+
+client:
+  command_hz: 100.0
+  telemetry_hz: 30.0
+  watchdog:
+    timeout_ms: 100.0
+    critical_ms: 500.0
+  calibration:
+    # Piecewise map from commanded speed to motor throttle.
+    # 0 m/s lands on the motor's neutral throttle, not on 0.
+    speed_mps: [-0.2, 0.0, 0.4, 0.7]
+    speed_throttle: [-0.13, 0.05, 0.33, 0.5]
+    steering_max_rad: 0.5
+    steering_max_throttle: 1.0
+    steering_invert: true
+    head_pan_zero_deg: 135.0
+    head_tilt_zero_deg: 15.0
+    head_pan_min_deg: -135.0
+    head_pan_max_deg: 135.0
+    head_tilt_min_deg: -10.0
+    head_tilt_max_deg: 75.0
+  servos:
+    pca_channels: 16
+    pca_frequency: 250
+    motor_channel: 0
+    motor_pwm_min: 1000
+    motor_pwm_max: 2000
+    wheel_channel: 1
+    wheel_pwm_min: 1000
+    wheel_pwm_max: 2000
+    neck_channel: 3
+    neck_actuation_range: 360
+    neck_pwm_min: 300
+    neck_pwm_max: 1800
+    face_channel: 2
+    face_actuation_range: 90
+    face_pwm_min: 1000
+    face_pwm_max: 2000
+  camera:
+    enabled: true
+    fps: 30.0
+    width: 640
+    height: 480
+    jpeg_quality: 70
+    tuning_file: "/usr/share/libcamera/ipa/rpi/pisp/imx290.json"
+    exposure_time: 10000
+    analogue_gain: 10.0
+    awb_enable: true
+    ae_enable: false
+  lidar:
+    enabled: true
+    scan_hz: 10.0
+    baudrate: 230400
+    sample_rate: 4
+    min_angle_deg: -180.0
+    max_angle_deg: 180.0
+    range_min_m: 0.02
+    range_max_m: 6.0
+    num_rays: 360
+    # Raw lidar angle that should become "forward" after the shift.
+    zero_angle_deg: -90.0
+    # Negate raw angles so the published scan increases counter-clockwise.
+    invert_to_ccw: true
+    blind_start_deg: 150.0
+    blind_end_deg: -150.0
+    blind_max_m: 0.12
+  imu:
+    enabled: false
+
+geometry:
+  wheelbase_m: 0.16
+  lidar_x: 0.08
+  lidar_y: 0.0
+  lidar_z: 0.12
+  lidar_yaw: 0.0
+  head_x: 0.12
+  head_y: 0.0
+  head_z: 0.17
+
+modes:
+  tick_hz: 50.0
+  friends_db: "data/friends.json"
+  keyboard:
+    forward_mps: 0.4
+    backward_mps: -0.2
+    fast_mps: 0.7
+    steering_rad: 0.45
+    yaw_damping_gain: 0.2
+    yaw_damping_min: 0.55
+  mouse:
+    pan_deg_per_px: 0.27
+    tilt_deg_per_px: 0.15
+  tracking:
+    face_match_threshold: 0.5
+    eye_confidence_threshold: 0.3
+    head_tracking_gain: 1.5
+    head_tracking_deadzone: 0.1
+    bbox_target_x_frac: 0.5
+    bbox_target_y_frac: 0.1
+    latency_compensation_cap_frac: 0.3
+    stable_track_frames: 10
+    frame_width_fallback: 640
+    frame_height_fallback: 480
+  staring:
+    gyro_compensation_gain: 0.0
+  silly_following:
+    forward_mps: 0.4
+    backward_mps: -0.2
+    steering_gain: 1.6
+    steering_deadzone_rad: 0.03
+    steering_yaw_damping_gain: 0.2
+    steering_yaw_damping_min: 0.55
+    max_steering_rad: 0.5
+    front_obstacle_distance_m: 0.15
+    side_obstacle_distance_m: 0.3
+    rear_clear_distance_m: 0.3
+    side_steering_nudge_rad: -0.35
+    reverse_timeout_sec: 1.5
+    reverse_steering_multiplier: -1.0
+    forward_speed_steering_reduction_gain: 0.4
+    forward_speed_min_factor: 0.7
+    stop_head_tilt_deg: 60.0
+    stop_without_lidar: true
+    front_sector_half_angle_deg: 30.0
+    side_sector_outer_angle_deg: 120.0
+    rear_sector_start_angle_deg: 170.0
+    gyro_compensation_gain: 1.0
+    search_timeout_sec: 1.5
+    search_pan_deg_per_sec: 120.0
+    search_tilt_deg_per_sec: 40.0
+    search_dwell_sec: 0.5
+    search_min_target_delta_deg: 25.0
+    search_pan_min_deg: -135.0
+    search_pan_max_deg: 135.0
+    search_tilt_min_deg: 0.0
+    search_tilt_max_deg: 40.0
+
+odometry:
+  publish_hz: 50.0
+  process_noise_xy: 0.002
+  process_noise_yaw: 0.01
+  kinematic_enabled: true
+  kinematic_var_xy: 0.04
+  kinematic_var_yaw: 0.08
+  scan_match_enabled: true
+  scan_match_var_xy: 0.008
+  scan_match_var_yaw: 0.015
+  scan_match_max_points: 180
+  scan_match_max_iters: 12
+  scan_match_max_range_m: 6.0
+  scan_match_min_range_m: 0.08
+  scan_match_outlier_m: 0.25
+  imu_enabled: false
+  imu_var_yaw: 0.01
+  encoder_enabled: false
+  encoder_var_xy: 0.01
+  visual_enabled: false
+  visual_var_xy: 0.02
+  visual_var_yaw: 0.03
+
+slam_toolbox:
+  solver_plugin: "solver_plugins::CeresSolver"
+  ceres_linear_solver: "SPARSE_NORMAL_CHOLESKY"
+  ceres_preconditioner: "SCHUR_JACOBI"
+  ceres_trust_strategy: "LEVENBERG_MARQUARDT"
+  ceres_dogleg_type: "TRADITIONAL_DOGLEG"
+  ceres_loss_function: "None"
+  odom_frame: "odom"
+  map_frame: "map"
+  base_frame: "base_link"
+  scan_topic: "/scan"
+  use_map_saver: true
+  mode: "mapping"
+  debug_logging: false
+  throttle_scans: 1
+  transform_publish_period: 0.02
+  map_update_interval: 0.5
+  resolution: 0.05
+  restamp_tf: false
+  min_laser_range: 0.08
+  max_laser_range: 6.0
+  minimum_time_interval: 0.1
+  transform_timeout: 0.2
+  tf_buffer_duration: 30.0
+  stack_size_to_use: 40000000
+  enable_interactive_mode: false
+  use_scan_matching: true
+  use_scan_barycenter: true
+  minimum_travel_distance: 0.1
+  minimum_travel_heading: 0.1
+  check_min_dist_and_heading_precisely: false
+  scan_buffer_size: 10
+  scan_buffer_maximum_scan_distance: 10.0
+  link_match_minimum_response_fine: 0.1
+  link_scan_maximum_distance: 1.5
+  loop_search_maximum_distance: 3.0
+  do_loop_closing: true
+  loop_match_minimum_chain_size: 10
+  loop_match_maximum_variance_coarse: 3.0
+  loop_match_minimum_response_coarse: 0.35
+  loop_match_minimum_response_fine: 0.45
+  correlation_search_space_dimension: 0.5
+  correlation_search_space_resolution: 0.01
+  correlation_search_space_smear_deviation: 0.1
+  loop_search_space_dimension: 8.0
+  loop_search_space_resolution: 0.05
+  loop_search_space_smear_deviation: 0.03
+  distance_variance_penalty: 0.5
+  angle_variance_penalty: 1.0
+  fine_search_angle_offset: 0.00349
+  coarse_search_angle_offset: 0.349
+  coarse_angle_resolution: 0.0349
+  minimum_angle_penalty: 0.9
+  minimum_distance_penalty: 0.5
+  use_response_expansion: true
+  min_pass_through: 2
+  occupancy_threshold: 0.1
+
+vision:
+  yolo_model: "/home/kir/Leosha/models/yolo11n-pose.pt"
+  yolo_device: "cpu"
+  yolo_conf: 0.5
+  yolo_imgsz: 320
+  tracker: "bytetrack.yaml"
+  enable_face_embedding: false
+  face_model: ""
+  embedding_interval: 25
+  face_min_confidence: 0.5
+  head_yaw_min_deg: -45.0
+  head_yaw_max_deg: 45.0
+  head_yaw_scale_deg: 57.2958
+  face_crop_ratio: 0.45
+  embedding_input_size: 112
+  embedding_norm_mean: 127.5
+  embedding_norm_std: 128.0
+  yaw_eye_dx_epsilon: 1.0e-6
+  log_level: "INFO"
+
+web_ui:
+  host: "0.0.0.0"
+  port: 8080
+
+monitor:
+  host: "0.0.0.0"
+  port: 8081
+  stale_sec: 2.5
+  refresh_hz: 2.0
+
+sim:
+  physics_hz: 100.0
+  slip: 0.02
+  speed_noise_mps: 0.0
+  yaw_noise_rad: 0.0
+  lidar_noise_m: 0.005
+  camera_width: 320
+  camera_height: 180
+  camera_fov_deg: 70.0
+  camera_fps: 15.0
+  jpeg_quality: 60
+  route_ate_limit_m: 0.35
+  worlds:
+    room:
+      start_x: 1.5
+      start_y: 1.2
+      start_yaw: 0.0
+      walls:
+        - [0.2, 0.2, 7.8, 0.2]
+        - [7.8, 0.2, 7.8, 5.8]
+        - [7.8, 5.8, 0.2, 5.8]
+        - [0.2, 5.8, 0.2, 0.2]
+      boxes:
+        - [3.4, 2.6, 4.4, 2.6]
+        - [4.4, 2.6, 4.4, 3.6]
+        - [4.4, 3.6, 3.4, 3.6]
+        - [3.4, 3.6, 3.4, 2.6]
+      persons:
+        - x: 5.5
+          y: 1.5
+          radius: 0.2
+          travel: 1.2
+  route:
+    - speed_mps: 0.3
+      steering_rad: 0.0
+      duration_sec: 2.0
+    - speed_mps: 0.25
+      steering_rad: 0.35
+      duration_sec: 2.0
+    - speed_mps: 0.3
+      steering_rad: 0.0
+      duration_sec: 1.5

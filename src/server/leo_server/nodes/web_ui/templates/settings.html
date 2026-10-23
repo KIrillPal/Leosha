@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block body %}
+<div class="grid">
+  <div class="card">
+    <label for="mode">Mode</label>
+    <p class="hint">Current: <span class="metric" id="mode">{{ mode }}</span></p>
+    <div id="modes">
+      {% for name in modes %}
+        <button type="button" data-mode="{{ name }}" onclick="setMode('{{ name }}')">{{ name }}</button>
+      {% endfor %}
+    </div>
+  </div>
+  <div class="card">
+    <label for="ip">Robot address</label>
+    <input id="ip" type="text" placeholder="192.168.1.50" value="{{ robot_ip|default('', true) }}">
+    <div style="margin-top:10px;"><button type="button" onclick="setIp()">Use this address</button></div>
+    <p class="hint" id="ipStatus">The override stays in memory for this session.</p>
+  </div>
+</div>
+<script>
+function markMode(mode) {
+  document.getElementById('mode').textContent = mode;
+  document.querySelectorAll('#modes button').forEach((button) => {
+    button.classList.toggle('active', button.dataset.mode === mode);
+  });
+}
+async function setMode(mode) {
+  await fetch('/api/mode', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({mode})});
+  markMode(mode);
+}
+async function setIp() {
+  const ip = document.getElementById('ip').value;
+  await fetch('/api/ip', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ip})});
+  document.getElementById('ipStatus').textContent = 'Using ' + ip;
+}
+markMode(document.getElementById('mode').textContent);
+setInterval(async () => {
+  const data = await (await fetch('/api/status')).json();
+  markMode(data.mode);
+  if (data.robot_ip && document.activeElement !== document.getElementById('ip')) {
+    document.getElementById('ip').value = data.robot_ip;
+  }
+}, 1000);
+</script>
+{% endblock %}

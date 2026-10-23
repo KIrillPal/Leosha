@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block body %}
+<style>
+  .lidar-wrap { display: grid; gap: 12px; grid-template-columns: 1fr 280px; }
+  .lidar-card { background: #0a0f1e; border: 1px solid #1e293b; border-radius: 12px; padding: 12px; }
+  #c { width: 100%; height: 70vh; display: block; border-radius: 10px; background: radial-gradient(circle at center, #101a34 0%, #090f20 65%, #060b18 100%); }
+  @media (max-width: 900px) { .lidar-wrap { grid-template-columns: 1fr; } }
+</style>
+<div class="lidar-wrap">
+  <div class="lidar-card"><canvas id="c"></canvas></div>
+  <div class="card">
+    <h3>LiDAR</h3>
+    <p class="hint">Points</p>
+    <p class="metric" id="points">0</p>
+    <p class="hint">Nearest finite range</p>
+    <p class="metric" id="near">–</p>
+  </div>
+</div>
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+function resize() {
+  const rect = canvas.getBoundingClientRect();
+  canvas.width = Math.max(320, Math.floor(rect.width));
+  canvas.height = Math.max(320, Math.floor(rect.height));
+}
+async function draw() {
+  resize();
+  const scan = await (await fetch('/api/lidar')).json();
+  const ranges = scan.ranges || [];
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  const cx = canvas.width / 2;
+  const cy = canvas.height / 2;
+  const scale = Math.min(cx, cy) / 6;
+  ctx.strokeStyle = '#7dd3fc';
+  ctx.lineWidth = 1;
+  let finite = 0;
+  let nearest = null;
+  ranges.forEach((r, i) => {
+    if (!Number.isFinite(r)) return;
+    finite += 1;
+    nearest = nearest === null ? r : Math.min(nearest, r);
+    const a = scan.angle_min + scan.angle_increment * i;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.lineTo(cx + Math.cos(a) * r * scale, cy - Math.sin(a) * r * scale);
+    ctx.stroke();
+  });
+  document.getElementById('points').textContent = finite;
+  document.getElementById('near').textContent = nearest === null ? '–' : nearest.toFixed(2) + ' m';
+}
+setInterval(draw, 200);
+</script>
+{% endblock %}

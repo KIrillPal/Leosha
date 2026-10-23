@@ -1,0 +1,202 @@
+{% extends "base.html" %}
+{% block body %}
+<style>
+    .teleop-root { display: flex; flex-direction: column; height: calc(100vh - 170px); background: white; border: 1px solid #dee2e6; }
+    .teleop-title { text-align: center; padding: 8px; border-bottom: 1px solid #dee2e6; background: #f8f9fa; font-weight: 700; }
+    .video-container { flex: 1; position: relative; overflow: hidden; background: #111; }
+    #videoFeed { width: 100%; height: 100%; object-fit: contain; }
+    #staringOverlay { position: absolute; inset: 0; z-index: 40; pointer-events: none; }
+    #centerDot { position: absolute; width: 8px; height: 8px; background: rgba(255, 0, 0, 0.7); border-radius: 50%; display: none; transform: translate(-50%, -50%); left: 50%; top: 50%; z-index: 100; }
+    .keyboard-status { position: absolute; top: 8px; left: 8px; background: rgba(255,255,255,0.9); border-radius: 8px; padding: 8px; z-index: 50; }
+    .key-row { display: flex; align-items: center; gap: 8px; margin: 4px 0; }
+    .key-box { width: 30px; height: 30px; border: 2px solid #ccc; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-weight: 700; background: #f8f9fa; }
+    .key-box.active.wasd { background: #ff6b35; border-color: #ff6b35; color: white; }
+    .key-box.active.shift { background: #007bff; border-color: #007bff; color: white; }
+    .panel { display: flex; flex-wrap: wrap; gap: 8px; padding: 8px; border-top: 1px solid #dee2e6; background: #f8f9fa; align-items: center; }
+    .teleop-root button { padding: 8px 12px; border: none; border-radius: 6px; color: white; background: #007bff; cursor: pointer; }
+    .teleop-root button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .stop-btn { background: #dc3545; }
+    .tracking-btn { background: #28a745; }
+    .tracking-btn.active { background: #dc3545; }
+    .mobile-pose { display: none; }
+    @media (max-width: 900px) {
+        .teleop-root { height: calc(100vh - 140px); }
+        .keyboard-status { display: none; }
+        #staringOverlay, #centerDot { display: none !important; }
+        .panel button { display: none; }
+        .panel .desktop-stats { display: none; }
+        .panel .mobile-pose { display: inline; font-weight: 700; }
+    }
+</style>
+<div class="teleop-root">
+    <div class="teleop-title">Robot Head &amp; Car Control</div>
+    <div class="video-container" id="videoContainer">
+        <img id="videoFeed" src="/video_feed" alt="Camera Feed">
+        <div id="centerDot"></div>
+        <canvas id="staringOverlay"></canvas>
+        <div class="keyboard-status">
+            <div class="key-row"><div class="key-box" id="keyW">W</div><span>Forward</span></div>
+            <div class="key-row"><div class="key-box" id="keyA">A</div><span>Left</span></div>
+            <div class="key-row"><div class="key-box" id="keyS">S</div><span>Backward</span></div>
+            <div class="key-row"><div class="key-box" id="keyD">D</div><span>Right</span></div>
+            <div class="key-row"><div class="key-box" id="keyShift">Shift</div><span>Turbo</span></div>
+        </div>
+    </div>
+    <div class="panel">
+        <button type="button" id="btnForward">Forward (W)</button>
+        <button type="button" id="btnBackward">Backward (S)</button>
+        <button type="button" id="btnLeft">Left (A)</button>
+        <button type="button" id="btnRight">Right (D)</button>
+        <button type="button" id="btnStop" class="stop-btn">Stop</button>
+        <button type="button" id="btnReset">Reset Head</button>
+        <button type="button" id="trackingBtn" class="tracking-btn">Enable Control</button>
+        <button type="button" id="btnAddFace">Add Face</button>
+        <button type="button" id="btnCapture">Capture Image</button>
+        <span class="desktop-stats">
+            Position: X=<span id="posX">0</span> Y=<span id="posY">0</span> |
+            <span id="staringMeta"></span>
+            <span id="controlStatus">Disabled</span>
+        </span>
+        <span class="mobile-pose">Pose: X=<span id="posXMobile">0</span> Y=<span id="posYMobile">0</span></span>
+    </div>
+</div>
+<script>
+let tracking = false;
+let pointerLocked = false;
+let headX = 0;
+let headY = 0;
+const keys = {w: false, a: false, s: false, d: false, shift: false};
+const videoContainer = document.getElementById('videoContainer');
+const videoFeed = document.getElementById('videoFeed');
+const centerDot = document.getElementById('centerDot');
+const trackingBtn = document.getElementById('trackingBtn');
+const controlStatus = document.getElementById('controlStatus');
+const keyBoxes = {w: keyW, a: keyA, s: keyS, d: keyD, shift: keyShift};
+const driveButtons = [btnForward, btnBackward, btnLeft, btnRight, btnStop, btnReset, btnAddFace, btnCapture];
+
+function paintKey(name, down) {
+    const box = keyBoxes[name];
+    if (!box) return;
+    box.classList.toggle('active', down);
+    box.classList.toggle(name === 'shift' ? 'shift' : 'wasd', down);
+}
+
+function paintButtons() {
+    driveButtons.forEach((button) => { button.disabled = !tracking; });
+}
+
+function postInput(extra) {
+    const body = Object.assign({tracking, head_dx: headX, head_dy: headY, action: null}, keys, extra || {});
+    headX = 0;
+    headY = 0;
+    return fetch('/api/input', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(body),
+    });
+}
+
+function enableControl() {
+    const request = videoContainer.requestPointerLock
+        || videoContainer.mozRequestPointerLock
+        || videoContainer.webkitRequestPointerLock;
+    if (request) request.call(videoContainer);
+    tracking = true;
+    trackingBtn.textContent = 'Disable Control';
+    trackingBtn.classList.add('active');
+    controlStatus.textContent = 'Enabled';
+    controlStatus.style.color = 'green';
+    paintButtons();
+    postInput();
+}
+
+function disableControl() {
+    const exit = document.exitPointerLock || document.mozExitPointerLock || document.webkitExitPointerLock;
+    if (exit) exit.call(document);
+    tracking = false;
+    Object.keys(keys).forEach((name) => {
+        keys[name] = false;
+        paintKey(name, false);
+    });
+    trackingBtn.textContent = 'Enable Control';
+    trackingBtn.classList.remove('active');
+    controlStatus.textContent = 'Disabled';
+    controlStatus.style.color = 'red';
+    paintButtons();
+    postInput();
+}
+
+function onPointerLockChange() {
+    pointerLocked = document.pointerLockElement === videoContainer
+        || document.mozPointerLockElement === videoContainer
+        || document.webkitPointerLockElement === videoContainer;
+    centerDot.style.display = pointerLocked ? 'block' : 'none';
+    videoFeed.style.cursor = pointerLocked ? 'none' : 'default';
+    if (!pointerLocked && tracking) disableControl();
+}
+
+trackingBtn.addEventListener('click', () => (tracking ? disableControl() : enableControl()));
+btnForward.addEventListener('click', () => { keys.w = true; keys.s = false; paintKey('w', true); paintKey('s', false); });
+btnBackward.addEventListener('click', () => { keys.s = true; keys.w = false; paintKey('s', true); paintKey('w', false); });
+btnLeft.addEventListener('click', () => { keys.a = true; keys.d = false; paintKey('a', true); paintKey('d', false); });
+btnRight.addEventListener('click', () => { keys.d = true; keys.a = false; paintKey('d', true); paintKey('a', false); });
+btnStop.addEventListener('click', () => {
+    ['w', 'a', 's', 'd'].forEach((name) => { keys[name] = false; paintKey(name, false); });
+});
+btnReset.addEventListener('click', () => postInput({action: {type: 'reset_head'}}));
+btnAddFace.addEventListener('click', () => {
+    const name = window.prompt('Face name (optional):', '');
+    if (name === null) return;
+    const action = {type: 'add_face'};
+    if (name.trim()) action.name = name.trim();
+    postInput({action});
+});
+
+document.addEventListener('pointerlockchange', onPointerLockChange);
+document.addEventListener('mozpointerlockchange', onPointerLockChange);
+document.addEventListener('webkitpointerlockchange', onPointerLockChange);
+document.addEventListener('mousemove', (event) => {
+    if (!tracking || !pointerLocked) return;
+    headX += event.movementX || 0;
+    headY += event.movementY || 0;
+});
+document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') {
+        disableControl();
+        return;
+    }
+    if (!tracking) return;
+    const name = event.key.toLowerCase();
+    if (!(name in keys) && event.key !== 'Shift') return;
+    event.preventDefault();
+    const key = event.key === 'Shift' ? 'shift' : name;
+    keys[key] = true;
+    paintKey(key, true);
+});
+document.addEventListener('keyup', (event) => {
+    if (!tracking) return;
+    const name = event.key.toLowerCase();
+    if (!(name in keys) && event.key !== 'Shift') return;
+    const key = event.key === 'Shift' ? 'shift' : name;
+    keys[key] = false;
+    paintKey(key, false);
+});
+setInterval(() => { if (tracking) postInput(); }, 50);
+setInterval(async () => {
+    const data = await (await fetch('/api/status')).json();
+    const ui = data.ui || {};
+    const x = Math.round(Number(ui.x) || 0);
+    const y = Math.round(Number(ui.y) || 0);
+    posX.textContent = x;
+    posY.textContent = y;
+    posXMobile.textContent = x;
+    posYMobile.textContent = y;
+    if (ui.staring_state) {
+        staringMeta.textContent = '| ' + ui.staring_state + ' ';
+    } else {
+        staringMeta.textContent = '';
+    }
+}, 200);
+paintButtons();
+</script>
+{% endblock %}

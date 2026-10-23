@@ -1,0 +1,31 @@
+[tool.poetry]
+name = "leo-server"
+version = "2.0.0"
+description = "LEO2 off-board ROS 2 server. One node per job."
+authors = ["LEO <leo@example.com>"]
+packages = [{include = "leo_server"}]
+
+[tool.poetry.dependencies]
+python = ">=3.10,<3.11"
+setuptools = ">=30.3,<80"
+leo-protocol = {path = "../shared", develop = true}
+leo-client = {path = "../client", extras = ["sim"], optional = true}
+numpy = ">=1.21,<1.25"
+PyYAML = ">=5.4"
+pyzmq = ">=22.0"
+Flask = ">=2.2"
+scipy = ">=1.8"
+opencv-python-headless = ">=4.5,<4.11"
+ultralytics = {version = ">=8.0", optional = true}
+onnxruntime = {version = ">=1.16", optional = true}
+
+[tool.poetry.extras]
+sim = ["leo-client"]
+vision = ["ultralytics", "onnxruntime"]
+
+[tool.poetry.group.dev.dependencies]
+pytest = ">=7.0,<8"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
