@@ -1,9 +1,11 @@
 name: leo-ros
 channels:
   - defaults
+  - conda-forge
 dependencies:
   - python=3.10
   - pip
+  - conda-forge::libcamera>=0.5
   - pip:
       - Flask>=2.2
       - numpy>=1.24
@@ -14,3 +16,8 @@ dependencies:
       - pytest>=7.0
       - scipy>=1.10
       - pygame>=2.5
+      - opencv-python-headless>=4.5,<4.11
+      - adafruit-circuitpython-servokit>=1.3
+      - lgpio>=0.2.2
+      - picamera2>=0.3
+      - ydlidar @ git+https://github.com/YDLIDAR/YDLidar-SDK.git@V1.2.7

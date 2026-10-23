@@ -19,9 +19,13 @@ cd /home/kir/Leosha/LEO2
 
 `-E` / `[sim]` pulls the client, which `sim:=room` starts with the same interpreter. `[vision]` adds YOLO and ONNX Runtime. Use `"src/server[sim]"` if you do not need poses.
 
-On the robot, a virtualenv is the right place. The YDLidar module comes from the lidar SDK, not from Poetry.
+On the robot, a virtualenv is the right place. The robot extra installs ServoKit, `lgpio`, and Picamera2, and builds the YDLidar SDK (`cmake` and `swig`). `libcamera` comes from conda-forge. The pip bindings do not compile against the apt headers, and apt `python3-libcamera` is built for the system Python, so the client virtualenv is set up to see the conda site-packages.
+
+Picamera2 also imports `pykms`. That module is apt `python3-kms++`, built for the system Python 3.11. The pip package `rpi-kms` does not compile against the current kms++ headers, so this Python 3.10 virtualenv still cannot import Picamera2.
 
 ```bash
+conda install -y -c conda-forge "libcamera>=0.5"
+sudo apt install -y cmake swig
 /usr/bin/python3 -m pip install --user poetry
 export PATH="$HOME/.local/bin:$PATH"
 cd /home/kir/Leosha/LEO2/src/client
@@ -32,7 +36,7 @@ poetry run python -m leo_client --server SERVER_HOST
 | Package | Path | What it installs |
 |---|---|---|
 | `leo-protocol` | `src/shared` | `msgpack`, `numpy`. Both sides import this. |
-| `leo-client` | `src/client` | `pyzmq`, OpenCV. Extra `sim`: pygame. Extra `robot`: ServoKit, Picamera2. |
+| `leo-client` | `src/client` | `pyzmq`, OpenCV. Extra `sim`: pygame. Extra `robot`: ServoKit, `lgpio`, Picamera2, YDLidar SDK. `libcamera` comes from conda-forge. |
 | `leo-server` | `src/server` | Flask, PyYAML, `pyzmq`, SciPy, OpenCV, the protocol. Extra `sim`: the client. Extra `vision`: Ultralytics, ONNX Runtime. |
 
 `colcon build` only registers the ROS package. Install the Python packages first.
