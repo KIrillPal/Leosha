@@ -48,7 +48,7 @@ def test_mouse_right_pans_with_the_pointer(tmp_path):
     robot.set_measured_joints(0.0, 15.0)
     robot.set_mode("teleoperation")
     command = robot.tick(_sense(keys=Keys(tracking=True, head_dx=10.0)))
-    assert command.head_pan_deg > 0.0
+    assert command.head_pan_deg < 0.0
 
 
 def test_mouse_down_lowers_the_head(tmp_path):
@@ -56,7 +56,7 @@ def test_mouse_down_lowers_the_head(tmp_path):
     robot.set_measured_joints(0.0, 15.0)
     robot.set_mode("teleoperation")
     command = robot.tick(_sense(keys=Keys(tracking=True, head_dy=10.0)))
-    assert command.head_tilt_deg > 15.0
+    assert command.head_tilt_deg < 15.0
 
 
 def test_staring_falls_back_to_the_first_stable_person(tmp_path):

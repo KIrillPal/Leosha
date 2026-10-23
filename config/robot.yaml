@@ -75,6 +75,7 @@ client:
     blind_start_deg: 150.0
     blind_end_deg: -150.0
     blind_max_m: 0.12
+    intensity_enabled: true
   imu:
     enabled: false
 
@@ -99,8 +100,8 @@ modes:
     yaw_damping_gain: 0.2
     yaw_damping_min: 0.55
   mouse:
-    pan_deg_per_px: 0.27
-    tilt_deg_per_px: 0.15
+    pan_deg_per_px: -0.27
+    tilt_deg_per_px: -0.15
   tracking:
     face_match_threshold: 0.5
     eye_confidence_threshold: 0.3
