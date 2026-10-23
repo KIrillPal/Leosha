@@ -39,11 +39,11 @@ client:
     wheel_channel: 1
     wheel_pwm_min: 1000
     wheel_pwm_max: 2000
-    neck_channel: 3
+    neck_channel: 2
     neck_actuation_range: 360
     neck_pwm_min: 300
     neck_pwm_max: 1800
-    face_channel: 2
+    face_channel: 3
     face_actuation_range: 90
     face_pwm_min: 1000
     face_pwm_max: 2000
@@ -75,8 +75,6 @@ client:
     blind_start_deg: 150.0
     blind_end_deg: -150.0
     blind_max_m: 0.12
-    # T-mini Plus scan frames carry intensity. The SDK checksum uses that length.
-    intensity_enabled: true
   imu:
     enabled: false
 
