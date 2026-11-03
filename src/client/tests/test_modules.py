@@ -54,6 +54,47 @@ def test_lidar_check_follows_scan_age():
     assert lidar.check() is False
 
 
+def test_camera_start_skips_run_when_disconnected(monkeypatch):
+    camera = Camera(CFG["camera"])
+    monkeypatch.setattr(Camera, "_attached", lambda _self: False)
+    camera.start()
+    assert camera._thread is None
+    assert camera.check() is False
+
+
+def test_lidar_run_returns_when_the_device_does_not_start(monkeypatch):
+    lidar = Lidar(CFG["lidar"])
+    monkeypatch.setattr(Lidar, "_configure", lambda *_args: None)
+
+    class _Laser:
+        def initialize(self) -> bool:
+            return False
+
+        def turnOn(self) -> bool:
+            raise AssertionError("turnOn")
+
+        def disconnecting(self) -> None:
+            return None
+
+    class _Ydlidar:
+        @staticmethod
+        def os_init() -> None:
+            return None
+
+        @staticmethod
+        def lidarPortList() -> dict:
+            return {}
+
+        @staticmethod
+        def CYdLidar() -> _Laser:
+            return _Laser()
+
+    monkeypatch.setitem(__import__("sys").modules, "ydlidar", _Ydlidar)
+    lidar._run()
+    assert lidar._scan is None
+    assert lidar.check() is False
+
+
 def test_camera_check_follows_frame_age():
     camera = Camera(CFG["camera"])
     assert camera.check() is False
