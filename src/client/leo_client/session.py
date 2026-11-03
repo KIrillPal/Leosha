@@ -22,7 +22,7 @@ from leo_client.calibration import (
     tilt_command_deg,
     tilt_servo_deg,
 )
-from leo_client.link import ClientLink
+from leo_client.link import ClientLink, local_ipv4_toward
 from leo_client.rates import Rate
 from leo_client.watchdog import Watchdog
 from leo_protocol.protocol import Command, Hello, Telemetry
@@ -251,11 +251,20 @@ class Session:
             LOGGER.debug("telemetry dropped", exc_info=True)
 
 
+def _hello(host: str, sim_world: str) -> Hello:
+    return Hello(
+        client_time_ns=time.monotonic_ns(),
+        sim=bool(sim_world),
+        world=sim_world,
+        local_ip=local_ipv4_toward(host),
+    )
+
+
 def open_link(server: str, sim_world: str, addresses: str | None = None, timeout_ms: int = 3000, resolve=None):
     chosen = server.strip()
-    hello = Hello(client_time_ns=time.monotonic_ns(), sim=bool(sim_world), world=sim_world)
     if chosen and is_ipv4(chosen):
-        LOGGER.info("direct server %s", chosen)
+        hello = _hello(chosen, sim_world)
+        LOGGER.info("direct server %s, robot address %s", chosen, hello.local_ip or "unknown")
         link = ClientLink(chosen, timeout_ms)
         try:
             return link, link.handshake(hello)
@@ -271,6 +280,8 @@ def open_link(server: str, sim_world: str, addresses: str | None = None, timeout
     LOGGER.info("duckdns %s via %s (%s)", host, path, ", ".join(item.ip for item in attempts))
     errors: list[str] = []
     for attempt in attempts:
+        hello = _hello(attempt.ip, sim_world)
+        LOGGER.info("robot address %s via %s", hello.local_ip or "unknown", attempt.ip)
         link = ClientLink(attempt.ip, timeout_ms)
         try:
             reply = link.handshake(hello)

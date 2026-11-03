@@ -2,12 +2,16 @@ import threading
 import time
 from pathlib import Path
 
-from leo_client.link import ClientLink
+from leo_client.link import ClientLink, local_ipv4_toward
 from leo_protocol.protocol import Command, Hello
 from leo_server.common.config import load_config
 from leo_server.nodes.robot_bridge.link import ServerLink, peer_ipv4, reply_bytes
 
 CFG = load_config(Path(__file__).resolve().parents[3] / "config" / "robot.yaml")
+
+
+def test_local_address_toward_loopback():
+    assert local_ipv4_toward("127.0.0.1") == "127.0.0.1"
 
 
 def test_peer_address_keeps_the_ipv4_host():

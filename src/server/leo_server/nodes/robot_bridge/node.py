@@ -15,6 +15,7 @@ from sensor_msgs.msg import CompressedImage, Imu, JointState, LaserScan
 from std_msgs.msg import String
 from tf2_ros import TransformBroadcaster
 
+from leo_protocol.duckdns import is_ipv4
 from leo_protocol.protocol import Command
 from leo_server.common.config import config_from_env
 from leo_server.common.drive import drive_type, fill_drive, read_drive
@@ -93,14 +94,17 @@ class RobotBridge(Node):
         self.get_logger().info("robot bridge listening")
 
     def _on_hello(self, hello, server_time_ns: int) -> bytes:
-        self._adopt_peer()
+        self._adopt(getattr(hello, "local_ip", ""))
         self._publish_robot_ip()
         sim = self._config.sim_payload(hello.world or "room") if hello.sim else None
         self._time_sync.observe(hello.client_time_ns, self.get_clock().now().nanoseconds)
         return reply_bytes(server_time_ns, hello, self._config.client_payload(), sim, self._config.network)
 
-    def _adopt_peer(self) -> None:
-        self._link.set_robot_ip(self._link.last_peer)
+    def _adopt(self, declared: str) -> None:
+        ip = (declared or "").strip()
+        if not is_ipv4(ip):
+            ip = self._link.last_peer
+        self._link.set_robot_ip(ip)
 
     def _on_drive(self, message) -> None:
         self._speed, self._steer = read_drive(message)
@@ -139,7 +143,6 @@ class RobotBridge(Node):
 
     def _poll(self) -> None:
         packet = self._link.poll()
-        self._adopt_peer()
         self._publish_robot_ip()
         if packet is None:
             return

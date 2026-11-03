@@ -24,6 +24,7 @@ class Hello:
     client_time_ns: int
     sim: bool
     world: str
+    local_ip: str = ""
 
 
 @dataclass
@@ -75,6 +76,7 @@ def pack_hello(hello: Hello) -> bytes:
             "client_time_ns": int(hello.client_time_ns),
             "sim": bool(hello.sim),
             "world": hello.world,
+            "local_ip": hello.local_ip,
         },
         **_PACK,
     )
@@ -88,6 +90,7 @@ def unpack_hello(payload: bytes) -> Hello:
         client_time_ns=int(data["client_time_ns"]),
         sim=bool(data["sim"]),
         world=str(data["world"]),
+        local_ip=str(data.get("local_ip") or ""),
     )
 
 

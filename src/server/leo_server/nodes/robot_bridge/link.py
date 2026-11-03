@@ -69,6 +69,8 @@ class ServerLink:
         fresh = self._ctx.socket(zmq.PUB)
         fresh.setsockopt(zmq.SNDHWM, 4)
         fresh.setsockopt(zmq.LINGER, 0)
+        fresh.setsockopt(zmq.RECONNECT_IVL, 100)
+        fresh.setsockopt(zmq.RECONNECT_IVL_MAX, 1000)
         if robot_ip:
             fresh.connect(f"tcp://{robot_ip}:{self._command_port}")
         previous = self._commands

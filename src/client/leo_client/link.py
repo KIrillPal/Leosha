@@ -7,9 +7,27 @@ Handshake: client REQ connects, server REP binds.
 
 from __future__ import annotations
 
+import socket
+
 import zmq
 
+from leo_protocol.duckdns import is_ipv4
 from leo_protocol.protocol import HANDSHAKE_PORT, Command, Hello, Telemetry, pack_hello, pack_telemetry, unpack_command, unpack_reply
+
+
+def local_ipv4_toward(host: str) -> str:
+    """Return the source IPv4 used to reach ``host``."""
+    probe = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        probe.connect((host, 9))
+        address = probe.getsockname()[0]
+    except OSError:
+        return ""
+    finally:
+        probe.close()
+    if is_ipv4(address):
+        return address
+    return ""
 
 
 class ClientLink:

@@ -4,8 +4,9 @@ from leo_protocol.protocol import Command, Hello, Scan, Telemetry, pack_command,
 
 
 def test_hello_and_command_round_trip():
-    hello = Hello(client_time_ns=5, sim=True, world="room")
+    hello = Hello(client_time_ns=5, sim=True, world="room", local_ip="192.168.31.6")
     assert unpack_hello(pack_hello(hello)) == hello
+    assert unpack_hello(pack_hello(Hello(5, False, ""))).local_ip == ""
     command = Command(1, 2, 0.3, -0.1, 10.0, -2.0)
     assert unpack_command(pack_command(command)) == command
 
