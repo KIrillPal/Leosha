@@ -2,12 +2,19 @@
 
 from __future__ import annotations
 
+import json
 import random
 import socket
 import struct
+import urllib.parse
+import urllib.request
 
 _SUFFIX = ".duckdns.org"
 _TXT = 16
+_DOH = (
+    "https://dns.google/resolve",
+    "https://cloudflare-dns.com/dns-query",
+)
 
 
 def is_ipv4(value: str) -> bool:
@@ -54,14 +61,35 @@ def is_private_ipv4(value: str) -> bool:
 
 def local_ipv4_from_txt(text: str) -> str:
     """Return the first IPv4 address in a DuckDNS TXT record, or an empty string."""
-    for token in text.replace(",", " ").split():
+    cleaned = text.replace(",", " ").replace('"', " ")
+    for token in cleaned.split():
         if is_ipv4(token):
             return token
     return ""
 
 
 def lookup_txt(host: str, timeout: float = 3.0) -> str:
-    """Return the TXT data for ``host``, or raise ``OSError`` when DNS fails."""
+    """Return the TXT data for ``host``, or raise ``OSError`` when DNS fails.
+
+    The system resolver is asked first. Some resolvers answer TXT with an empty
+    set, so a public DNS-over-HTTPS server is used when that answer has no IPv4.
+    """
+    try:
+        text = _lookup_txt_udp(host, timeout)
+    except OSError:
+        text = ""
+    if local_ipv4_from_txt(text):
+        return text
+    try:
+        https = _lookup_txt_https(host, timeout)
+    except OSError as exc:
+        if text:
+            return text
+        raise OSError(f"txt lookup {host} failed") from exc
+    return https or text
+
+
+def _lookup_txt_udp(host: str, timeout: float) -> str:
     query_id = random.randrange(65536)
     message = _dns_query(host, query_id)
     server = _nameserver()
@@ -76,6 +104,42 @@ def lookup_txt(host: str, timeout: float = 3.0) -> str:
         return parse_txt_response(payload, query_id)
     except ValueError as exc:
         raise OSError(f"txt lookup {host} via {server} failed: {exc}") from exc
+
+
+def _lookup_txt_https(host: str, timeout: float) -> str:
+    errors: list[str] = []
+    for endpoint in _DOH:
+        try:
+            return _doh_txt(endpoint, host, timeout)
+        except OSError as exc:
+            errors.append(str(exc))
+    detail = "; ".join(errors) if errors else host
+    raise OSError(f"txt lookup {host} via HTTPS failed: {detail}")
+
+
+def _doh_txt(endpoint: str, host: str, timeout: float) -> str:
+    query = urllib.parse.urlencode({"name": host, "type": "TXT"})
+    request = urllib.request.Request(
+        f"{endpoint}?{query}",
+        headers={"accept": "application/dns-json"},
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except (OSError, json.JSONDecodeError, ValueError) as exc:
+        raise OSError(f"txt lookup {host} via {endpoint} failed") from exc
+    return txt_from_doh(payload)
+
+
+def txt_from_doh(payload: dict) -> str:
+    """Return TXT strings from a DNS-over-HTTPS JSON answer."""
+    if payload.get("Status") not in (0, None):
+        raise OSError(f"dns status {payload.get('Status')}")
+    parts: list[str] = []
+    for answer in payload.get("Answer") or []:
+        if answer.get("type") == _TXT:
+            parts.append(str(answer.get("data", "")))
+    return "".join(parts)
 
 
 def parse_txt_response(payload: bytes, query_id: int) -> str:

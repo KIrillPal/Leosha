@@ -1,6 +1,13 @@
 import struct
 
-from leo_protocol.duckdns import hostname, is_private_ipv4, local_ipv4_from_txt, parse_txt_response, subdomain
+from leo_protocol.duckdns import (
+    hostname,
+    is_private_ipv4,
+    local_ipv4_from_txt,
+    parse_txt_response,
+    subdomain,
+    txt_from_doh,
+)
 from leo_server.nodes.robot_bridge.duckdns import DuckDns, parse_reply
 
 
@@ -101,7 +108,11 @@ def test_private_ranges_and_txt_parsing():
     assert not is_private_ipv4("100.64.0.8")
     assert not is_private_ipv4("31.59.217.158")
     assert local_ipv4_from_txt("192.168.0.20") == "192.168.0.20"
+    assert local_ipv4_from_txt('"192.168.31.71"') == "192.168.31.71"
     assert local_ipv4_from_txt("nope") == ""
+    answer = {"Status": 0, "Answer": [{"type": 16, "data": '"192.168.31.71"'}]}
+    assert local_ipv4_from_txt(txt_from_doh(answer)) == "192.168.31.71"
+    assert txt_from_doh({"Status": 0, "Answer": []}) == ""
     packet = struct.pack("!HHHHHH", 7, 0x8180, 1, 1, 0, 0)
     for label in (b"ipleo", b"duckdns", b"org"):
         packet += bytes([len(label)]) + label
