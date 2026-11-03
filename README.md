@@ -62,7 +62,7 @@ ros2 launch leo_server leo.launch.py sim:=room
 
 On the server, launch without `sim`. Set `network.robot_ip` in `robot.yaml` to the robot, or type the address on the settings page (that override is not written back to the file).
 
-To publish the server's public address, set `duckdns.enabled` and `duckdns.domain` in `robot.yaml`. Put the token in `duckdns.token` or in `DUCKDNS_TOKEN` (the environment variable wins). `robot_bridge` updates DuckDNS every `duckdns.update_sec`. Forward TCP `5551` and `5550` from the server's router to this machine. The server still dials `network.robot_ip` on the command port, so that path has to be reachable on its own.
+To publish the server address, set `duckdns.enabled` and `duckdns.domain` in `robot.yaml`. Put the token in `duckdns.token` or in `DUCKDNS_TOKEN` (the environment variable wins). `robot_bridge` updates DuckDNS every `duckdns.update_sec`. The A record is the public IPv4 DuckDNS sees. Set `duckdns.global_ip` to publish another address there, such as a NetBird address. The TXT record is this machine's private IPv4. `leo-server --ip 192.168.1.10` publishes that address instead, which is the Windows address when the server runs in WSL. Forward TCP `5551` and `5550` from the server's router to this machine when the robot is not on the same LAN. The server still dials `network.robot_ip` on the command port, so that path has to be reachable on its own.
 
 On the robot, set the same name in `domain` inside [`data/server_ips.yaml`](data/server_ips.yaml):
 
@@ -70,7 +70,7 @@ On the robot, set the same name in `domain` inside [`data/server_ips.yaml`](data
 python3 -m leo_client
 ```
 
-The client resolves that name, connects to the IPv4 it gets, and writes the address at the top of the file with the session time. If DNS fails it tries the saved addresses from newest to oldest. Calibration, sensor rates and ports still arrive in the handshake.
+The client resolves that name, tries the private address from the TXT record, then the public address from the A record, and writes both at the top of the file with the session time. Every saved row is tried in that same order. If DNS fails it walks the saved rows from newest to oldest. Calibration, sensor rates and ports still arrive in the handshake.
 
 `--server 10.0.0.8` dials that IP and does not rewrite the address book. `--server ipleo.duckdns.org` uses that name for this run.
 

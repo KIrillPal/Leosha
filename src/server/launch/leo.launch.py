@@ -1,4 +1,4 @@
-"""Start every LEO node. The launch file passes the config path and nothing else."""
+"""Start every LEO node. The launch file passes the config path and an optional server address."""
 
 from __future__ import annotations
 
@@ -38,6 +38,7 @@ def _nodes(context, *args, **kwargs):
     del args, kwargs
     config_path = LaunchConfiguration("config").perform(context)
     sim = LaunchConfiguration("sim").perform(context)
+    server = LaunchConfiguration("server").perform(context).strip()
     profile = LaunchConfiguration("profile").perform(context) == "true"
     root = Path(config_path).resolve().parent.parent
     logs = root / "logs"
@@ -52,12 +53,15 @@ def _nodes(context, *args, **kwargs):
         kwargs = {}
         if profile:
             kwargs["prefix"] = f"{sys.executable} -m cProfile -o {logs / (name + '.prof')}"
+        arguments = ["--config", config_path]
+        if name == "robot_bridge" and server:
+            arguments.extend(["--server", server])
         actions.append(
             Node(
                 package="leo_server",
                 executable=name,
                 name=name,
-                arguments=["--config", config_path],
+                arguments=arguments,
                 output="own_log",
                 additional_env={"LEO_CONFIG": config_path, "PYTHONPATH": os.pathsep.join([str(root / "src" / "server"), str(root / "src" / "shared"), os.environ.get("PYTHONPATH", "")])},
                 **kwargs,
@@ -84,6 +88,7 @@ def generate_launch_description() -> LaunchDescription:
         [
             DeclareLaunchArgument("config", default_value=_default_config()),
             DeclareLaunchArgument("sim", default_value=""),
+            DeclareLaunchArgument("server", default_value=""),
             DeclareLaunchArgument("profile", default_value="false"),
             OpaqueFunction(function=_nodes),
         ]

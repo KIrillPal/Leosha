@@ -40,7 +40,7 @@ def _pitch_quat(pitch: float) -> tuple[float, float, float, float]:
 
 
 class RobotBridge(Node):
-    def __init__(self, config) -> None:
+    def __init__(self, config, server_ip: str = "") -> None:
         super().__init__("robot_bridge")
         self._config = config
         ports = config.network
@@ -81,7 +81,7 @@ class RobotBridge(Node):
         self.create_timer(0.02, self._repeat_command)
         self.create_timer(1.0, self._publish_stats)
         self._link.start(self._on_hello)
-        self._duckdns = DuckDns.start_from(config.duckdns, self.get_logger())
+        self._duckdns = DuckDns.start_from(config.duckdns, self.get_logger(), server_ip)
         self.get_logger().info("robot bridge listening")
 
     def _on_hello(self, hello, server_time_ns: int) -> bytes:
@@ -240,9 +240,10 @@ class RobotBridge(Node):
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", default=None)
+    parser.add_argument("--server", default="")
     args, ros_args = parser.parse_known_args()
     rclpy.init(args=ros_args)
-    node = RobotBridge(config_from_env(args.config))
+    node = RobotBridge(config_from_env(args.config), args.server.strip())
     try:
         rclpy.spin(node)
     finally:

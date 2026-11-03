@@ -1,7 +1,8 @@
-"""Publish this machine's public IPv4 address to DuckDNS.
+"""Publish this machine's global and local IPv4 addresses to DuckDNS.
 
-The request goes out over IPv4 and omits an explicit address, so DuckDNS
-records the address it sees. The robot resolves the same name.
+The A record is the public address DuckDNS sees, unless ``global_ip`` is set.
+That override is where a NetBird address goes later. The TXT record is the
+private address on the default route. The robot tries the TXT address first.
 """
 
 from __future__ import annotations
@@ -13,8 +14,9 @@ import ssl
 import threading
 import urllib.parse
 import urllib.request
+from dataclasses import dataclass
 
-from leo_protocol.duckdns import hostname, is_ipv4, subdomain
+from leo_protocol.duckdns import hostname, is_ipv4, is_private_ipv4, subdomain
 
 
 class _IPv4HTTPSConnection(http.client.HTTPSConnection):
@@ -40,6 +42,25 @@ def _urlopen(request, timeout: float):
     return urllib.request.build_opener(_IPv4Handler()).open(request, timeout=timeout)
 
 
+@dataclass(frozen=True)
+class Published:
+    global_ip: str
+    local_ip: str
+
+
+def lan_ipv4() -> str:
+    """Return the private IPv4 of the default route, or an empty string."""
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+            sock.connect(("192.0.2.1", 9))
+            address = sock.getsockname()[0]
+    except OSError:
+        return ""
+    if not is_private_ipv4(address):
+        return ""
+    return address
+
+
 def parse_reply(body: str) -> str:
     lines = [line.strip() for line in body.splitlines() if line.strip()]
     if not lines or lines[0] != "OK":
@@ -51,7 +72,16 @@ def parse_reply(body: str) -> str:
 
 
 class DuckDns:
-    def __init__(self, domain: str, token: str, update_sec: float, log, opener=None) -> None:
+    def __init__(
+        self,
+        domain: str,
+        token: str,
+        update_sec: float,
+        log,
+        opener=None,
+        global_ip: str = "",
+        local_ip=None,
+    ) -> None:
         self.hostname = hostname(domain)
         self._subdomain = subdomain(domain)
         self._token = token.strip()
@@ -59,24 +89,48 @@ class DuckDns:
             raise ValueError("DuckDNS token is empty")
         if update_sec <= 0:
             raise ValueError("duckdns.update_sec must be positive")
+        self._global_ip = global_ip.strip()
+        if self._global_ip and not is_ipv4(self._global_ip):
+            raise ValueError("duckdns.global_ip must be an IPv4 address or empty")
         self._update_sec = float(update_sec)
         self._log = log
         self._opener = opener or _urlopen
+        self._local_ip = local_ip or lan_ipv4
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
 
     @classmethod
-    def start_from(cls, section: dict, log) -> DuckDns | None:
+    def start_from(cls, section: dict, log, local_ip: str = "") -> DuckDns | None:
         if not section["enabled"]:
             log.info("duckdns is disabled")
             return None
         token = os.environ.get("DUCKDNS_TOKEN", "").strip() or str(section["token"]).strip()
         domain = str(section["domain"]).strip()
         if not domain or not token:
-            log.error("duckdns is enabled but domain or token is empty; set duckdns.domain and duckdns.token, or DUCKDNS_TOKEN")
+            log.error(
+                "duckdns is enabled but domain or token is empty; "
+                "set duckdns.domain and duckdns.token, or DUCKDNS_TOKEN"
+            )
             return None
+        pinned = local_ip.strip()
+        if pinned and not is_private_ipv4(pinned):
+            log.error(f"duckdns local address {pinned} is not a private IPv4 address")
+            return None
+
+        def provider():
+            return pinned
+
+        if not pinned:
+            provider = None
         try:
-            service = cls(domain, token, float(section["update_sec"]), log)
+            service = cls(
+                domain,
+                token,
+                float(section["update_sec"]),
+                log,
+                global_ip=str(section.get("global_ip", "")),
+                local_ip=provider,
+            )
         except ValueError as exc:
             log.error(str(exc))
             return None
@@ -93,25 +147,37 @@ class DuckDns:
         if self._thread is not None:
             self._thread.join(timeout=1.0)
 
-    def publish_once(self) -> str:
-        query = urllib.parse.urlencode(
-            {"domains": self._subdomain, "token": self._token, "verbose": "true"}
-        )
+    def publish_once(self) -> Published:
+        local_ip = self._local_ip() or ""
+        if local_ip and not is_private_ipv4(local_ip):
+            raise ValueError(f"local IPv4 is not a private address: {local_ip}")
+        fields = {"domains": self._subdomain, "token": self._token, "verbose": "true"}
+        if self._global_ip:
+            fields["ip"] = self._global_ip
+        if local_ip:
+            fields["txt"] = local_ip
+        query = urllib.parse.urlencode(fields)
         request = urllib.request.Request(f"https://www.duckdns.org/update?{query}", method="GET")
         with self._opener(request, timeout=15) as response:
             body = response.read().decode("utf-8", errors="replace")
-        return parse_reply(body)
+        return Published(parse_reply(body), local_ip)
 
     def _loop(self) -> None:
         while not self._stop.is_set():
             try:
-                address = self.publish_once()
+                published = self.publish_once()
             except Exception as exc:
                 self._log.warning(f"duckdns update failed: {self._safe(exc)}")
             else:
-                self._log.info(f"duckdns {self.hostname} -> {address}")
+                self._log.info(self._published(published))
             if self._stop.wait(self._update_sec):
                 return
+
+    def _published(self, published: Published) -> str:
+        text = f"duckdns {self.hostname} global {published.global_ip}"
+        if published.local_ip:
+            text += f" local {published.local_ip}"
+        return text
 
     def _safe(self, exc: Exception) -> str:
         text = f"{exc.__class__.__name__}: {exc}"

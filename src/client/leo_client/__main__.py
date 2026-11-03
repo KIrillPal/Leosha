@@ -1,8 +1,8 @@
 """Robot entry point.
 
 Pass ``--server`` as an IP to dial that host directly. Pass a DuckDNS name,
-or omit it and set ``domain`` in ``data/server_ips.yaml``, to resolve the
-server and remember the address.
+or omit it and set ``domain`` in ``data/server_ips.yaml``. The client tries
+each server's private address, then its global address, and remembers both.
 """
 
 from __future__ import annotations

@@ -203,26 +203,26 @@ def open_link(server: str, sim_world: str, addresses: str | None = None, timeout
     path = Path(addresses) if addresses else default_book_path()
     book = AddressBook.load(path)
     if resolve is None:
-        targets, host = plan_targets(server, book)
+        attempts, host = plan_targets(server, book)
     else:
-        targets, host = plan_targets(server, book, resolve)
-    LOGGER.info("duckdns %s via %s (%s)", host, path, ", ".join(targets))
+        attempts, host = plan_targets(server, book, resolve)
+    LOGGER.info("duckdns %s via %s (%s)", host, path, ", ".join(item.ip for item in attempts))
     errors: list[str] = []
-    for ip in targets:
-        link = ClientLink(ip, timeout_ms)
+    for attempt in attempts:
+        link = ClientLink(attempt.ip, timeout_ms)
         try:
             reply = link.handshake(hello)
         except Exception as exc:
-            errors.append(f"{ip}: {exc}")
-            LOGGER.warning("handshake %s failed: %s", ip, exc)
+            errors.append(f"{attempt.ip}: {exc}")
+            LOGGER.warning("handshake %s failed: %s", attempt.ip, exc)
             link.close()
             continue
         try:
-            book.remember(ip, domain=host if not book.domain else None)
+            book.remember(attempt.local_ip, attempt.global_ip, domain=host if not book.domain else None)
         except Exception:
             link.close()
             raise
-        LOGGER.info("saved server %s session to %s", ip, book.path)
+        LOGGER.info("saved server local %s global %s to %s", attempt.local_ip, attempt.global_ip, book.path)
         return link, reply
     detail = "; ".join(errors) if errors else "no addresses"
     raise RuntimeError(f"could not open a session ({detail})")

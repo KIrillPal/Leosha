@@ -8,6 +8,7 @@ from pathlib import Path
 
 import yaml
 
+from leo_protocol.duckdns import is_ipv4
 from leo_protocol.protocol import HANDSHAKE_PORT
 
 
@@ -209,10 +210,13 @@ def _duckdns(value, path: str) -> dict:
         "domain": _STR,
         "token": _STR,
         "update_sec": _FLOAT,
+        "global_ip": _STR,
     }
     parsed = _section(_mapping(value, path), spec, path)
     if parsed["update_sec"] <= 0:
         raise ConfigError(f"{path}.update_sec must be positive")
+    if parsed["global_ip"] and not is_ipv4(parsed["global_ip"]):
+        raise ConfigError(f"{path}.global_ip must be an IPv4 address or empty")
     return parsed
 
 

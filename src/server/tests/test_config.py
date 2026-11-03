@@ -15,8 +15,9 @@ def test_robot_yaml_loads():
     assert cfg.client["lidar"]["intensity_enabled"] is True
     assert cfg.slam_toolbox["minimum_travel_distance"] == 0.1
     assert "room" in cfg.sim["worlds"]
-    assert cfg.duckdns["enabled"] is False
+    assert cfg.duckdns["enabled"] is True
     assert cfg.duckdns["update_sec"] == 300.0
+    assert cfg.duckdns["global_ip"] == ""
 
 
 def test_missing_file_fails(tmp_path):
@@ -37,6 +38,14 @@ def test_duckdns_period_must_be_positive(tmp_path):
     path = tmp_path / "robot.yaml"
     path.write_text(text, encoding="utf-8")
     with pytest.raises(ConfigError, match="update_sec"):
+        load_config(path)
+
+
+def test_duckdns_global_ip_must_be_ipv4_or_empty(tmp_path):
+    text = CONFIG.read_text(encoding="utf-8").replace('global_ip: ""', 'global_ip: "netbird"', 1)
+    path = tmp_path / "robot.yaml"
+    path.write_text(text, encoding="utf-8")
+    with pytest.raises(ConfigError, match="global_ip"):
         load_config(path)
 
 

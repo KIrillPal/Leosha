@@ -1,8 +1,8 @@
-"""YAML address book of server IPs, newest session first.
+"""YAML address book of server endpoints, newest session first.
 
-The robot resolves its DuckDNS name, handshakes that IP, and rewrites this
-file. If DNS is down it tries the saved addresses from top to bottom.
-A literal ``--server`` IP skips the book, so the local simulator stays offline.
+The robot resolves its DuckDNS name. The TXT record is the server's private
+address and the A record is the global one. Each saved row is tried the same
+way: local, then global. A literal ``--server`` IP skips the book.
 """
 
 from __future__ import annotations
@@ -14,23 +14,33 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
-from leo_protocol.duckdns import hostname, is_ipv4
+from leo_protocol.duckdns import hostname, is_ipv4, local_ipv4_from_txt, lookup_txt
 
 LOGGER = logging.getLogger("leo.client")
 
 _HEADER = """\
 # Server addresses learned from DuckDNS. Newest session is first.
 # `domain` is the name this robot resolves. The update token stays on the server.
+# `local` is tried before `global` for every row.
 # `session` is the local time of the last successful handshake.
-# List order is the dial order. A successful session moves that IP to the top.
+# List order is the dial order. A successful session moves that row to the top.
 # Delete a row to stop trying it. This file is rewritten after each session.
 """
+_FIELDS = ("ip", "local", "global", "session")
 
 
 @dataclass(frozen=True)
 class ServerAddress:
-    ip: str
+    local_ip: str
+    global_ip: str
     session: str
+
+
+@dataclass(frozen=True)
+class Dial:
+    ip: str
+    local_ip: str
+    global_ip: str
 
 
 class AddressBook:
@@ -47,14 +57,13 @@ class AddressBook:
         domain, servers = _parse(text, path)
         return cls(path, domain, servers)
 
-    def remember(self, ip: str, domain: str | None = None, session: str | None = None) -> None:
-        if not is_ipv4(ip):
-            raise ValueError(f"not an IPv4 address: {ip}")
+    def remember(self, local_ip: str, global_ip: str, domain: str | None = None, session: str | None = None) -> None:
+        local_ip, global_ip = _pair_ips(local_ip, global_ip)
         if domain and not self.domain:
             self.domain = domain
         stamp = session or datetime.now().astimezone().isoformat(timespec="seconds")
-        kept = [item for item in self.servers if item.ip != ip]
-        self.servers = [ServerAddress(ip, stamp), *kept]
+        kept = [item for item in self.servers if (item.local_ip, item.global_ip) != (local_ip, global_ip)]
+        self.servers = [ServerAddress(local_ip, global_ip, stamp), *kept]
         self.save()
 
     def save(self) -> None:
@@ -62,7 +71,8 @@ class AddressBook:
         if not self.servers:
             lines[-1] = "servers: []"
         for item in self.servers:
-            lines.append(f"  - ip: {_quote(item.ip)}")
+            lines.append(f"  - local: {_quote(item.local_ip)}")
+            lines.append(f"    global: {_quote(item.global_ip)}")
             lines.append(f"    session: {_quote(item.session)}")
         lines.append("")
         self.path.parent.mkdir(parents=True, exist_ok=True)
@@ -70,14 +80,20 @@ class AddressBook:
         temporary.write_text("\n".join(lines), encoding="utf-8")
         temporary.replace(self.path)
 
-    def dial_order(self, resolved: str | None) -> list[str]:
-        ordered: list[str] = []
-        if resolved:
-            ordered.append(resolved)
-        for item in self.servers:
-            if item.ip not in ordered:
-                ordered.append(item.ip)
-        return ordered
+    def dial_order(self, resolved: ServerAddress | None) -> list[Dial]:
+        rows: list[ServerAddress] = []
+        if resolved is not None and (resolved.local_ip or resolved.global_ip):
+            rows.append(resolved)
+        rows.extend(self.servers)
+        attempts: list[Dial] = []
+        seen: set[str] = set()
+        for row in rows:
+            for ip in _row_ips(row):
+                if ip in seen:
+                    continue
+                seen.add(ip)
+                attempts.append(Dial(ip, row.local_ip, row.global_ip))
+        return attempts
 
 
 def default_book_path() -> Path:
@@ -101,29 +117,79 @@ def resolve_ipv4(host: str) -> str:
     return str(infos[0][4][0])
 
 
-def plan_targets(server: str, book: AddressBook, resolve=resolve_ipv4) -> tuple[list[str], str | None]:
-    """Return IPs to try, and the DuckDNS hostname when the book is in use.
+def resolve_server(host: str) -> ServerAddress:
+    """Return the TXT address as local and the A record as global."""
+    local_ip = ""
+    global_ip = ""
+    errors: list[str] = []
+    try:
+        global_ip = resolve_ipv4(host)
+    except OSError as exc:
+        errors.append(str(exc))
+    try:
+        local_ip = local_ipv4_from_txt(lookup_txt(host))
+    except OSError as exc:
+        errors.append(str(exc))
+    if not local_ip and not global_ip:
+        detail = "; ".join(errors) if errors else host
+        raise OSError(f"could not resolve {host}: {detail}")
+    return ServerAddress(local_ip, global_ip, "")
+
+
+def plan_targets(server: str, book: AddressBook, resolve=resolve_server) -> tuple[list[Dial], str | None]:
+    """Return dial attempts, and the DuckDNS hostname when the book is in use.
 
     A literal IPv4 ``server`` is used alone. The second value is then ``None``.
     """
     chosen = server.strip()
     if chosen and is_ipv4(chosen):
-        return [chosen], None
+        return [Dial(chosen, "", "")], None
     raw_domain = chosen or book.domain
     if not raw_domain.strip():
         raise RuntimeError("pass --server or set domain in data/server_ips.yaml")
     host = hostname(raw_domain)
-    resolved = None
+    resolved = _resolve_row(host, resolve)
+    attempts = book.dial_order(resolved)
+    if not attempts:
+        raise RuntimeError(f"no server IP for {host}, and {book.path} has no saved addresses")
+    return attempts, host
+
+
+def _resolve_row(host: str, resolve) -> ServerAddress | None:
     try:
         resolved = resolve(host)
     except OSError as exc:
         LOGGER.warning("duckdns resolve failed for %s: %s", host, exc)
-    if resolved is not None and not is_ipv4(resolved):
-        raise RuntimeError(f"{host} resolved to {resolved}, which is not IPv4")
-    targets = book.dial_order(resolved)
-    if not targets:
-        raise RuntimeError(f"no server IP for {host}, and {book.path} has no saved addresses")
-    return targets, host
+        return None
+    _require_ipv4(host, "local", resolved.local_ip)
+    _require_ipv4(host, "global", resolved.global_ip)
+    return resolved
+
+
+def _require_ipv4(host: str, label: str, value: str) -> None:
+    if value and not is_ipv4(value):
+        raise RuntimeError(f"{host} {label} address {value} is not IPv4")
+
+
+def _pair_ips(local_ip: str, global_ip: str) -> tuple[str, str]:
+    local_ip = local_ip.strip()
+    global_ip = global_ip.strip()
+    if local_ip and not is_ipv4(local_ip):
+        raise ValueError(f"not an IPv4 address: {local_ip}")
+    if global_ip and not is_ipv4(global_ip):
+        raise ValueError(f"not an IPv4 address: {global_ip}")
+    if not local_ip and not global_ip:
+        raise ValueError("server address is empty")
+    return local_ip, global_ip
+
+
+def _row_ips(row: ServerAddress) -> list[str]:
+    ordered: list[str] = []
+    if row.local_ip:
+        ordered.append(row.local_ip)
+    if row.global_ip and row.global_ip not in ordered:
+        ordered.append(row.global_ip)
+    return ordered
 
 
 def _parse(text: str, path: Path) -> tuple[str, list[ServerAddress]]:
@@ -137,13 +203,7 @@ def _parse(text: str, path: Path) -> tuple[str, list[ServerAddress]]:
         nonlocal current
         if current is None:
             return
-        ip = current.get("ip", "")
-        session = current.get("session", "")
-        if not is_ipv4(ip):
-            raise ValueError(f"{path}: not an IPv4 address: {ip!r}")
-        if not session:
-            raise ValueError(f"{path}: {ip} is missing session")
-        servers.append(ServerAddress(ip, session))
+        servers.append(_row_from(current, path))
         current = None
 
     for line_number, raw in enumerate(text.splitlines(), start=1):
@@ -168,20 +228,36 @@ def _parse(text: str, path: Path) -> tuple[str, list[ServerAddress]]:
             raise ValueError(f"{path}:{line_number}: unexpected line")
         if stripped.startswith("- "):
             finish()
-            current = {"ip": "", "session": ""}
+            current = {"local": "", "global": "", "ip": "", "session": ""}
             body = stripped[2:].strip()
             if body:
                 key, value = _pair(body, path, line_number)
                 current[key] = value
             continue
         if current is None:
-            raise ValueError(f"{path}:{line_number}: list item must start with '- ip:'")
+            raise ValueError(f"{path}:{line_number}: list item must start with '- local:'")
         key, value = _pair(stripped, path, line_number)
         current[key] = value
     finish()
     if not seen and text.strip():
         raise ValueError(f"{path}: expected domain and servers")
     return domain, servers
+
+
+def _row_from(current: dict[str, str], path: Path) -> ServerAddress:
+    local_ip = current.get("local", "")
+    global_ip = current.get("global", "") or current.get("ip", "")
+    session = current.get("session", "")
+    if local_ip and not is_ipv4(local_ip):
+        raise ValueError(f"{path}: not an IPv4 address: {local_ip!r}")
+    if global_ip and not is_ipv4(global_ip):
+        raise ValueError(f"{path}: not an IPv4 address: {global_ip!r}")
+    if not local_ip and not global_ip:
+        raise ValueError(f"{path}: a server row needs local or global")
+    if not session:
+        address = local_ip or global_ip
+        raise ValueError(f"{path}: {address} is missing session")
+    return ServerAddress(local_ip, global_ip, session)
 
 
 def _strip_comment(line: str) -> str:
@@ -203,7 +279,7 @@ def _pair(body: str, path: Path, line_number: int) -> tuple[str, str]:
         raise ValueError(f"{path}:{line_number}: expected key: value")
     key, value = body.split(":", 1)
     key = key.strip()
-    if key not in ("ip", "session"):
+    if key not in _FIELDS:
         raise ValueError(f"{path}:{line_number}: unknown field {key!r}")
     return key, _unquote(value.strip())
 
