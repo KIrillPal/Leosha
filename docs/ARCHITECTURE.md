@@ -81,6 +81,8 @@ Handshake port `5551` is the only number fixed in code (`leo_protocol.HANDSHAKE_
 
 Ranges are float32 bytes, not a list of numbers. A scan is sent once per revolution. A JPEG is sent only when the frame stamp changes. Joints and client FPS go out at `client.telemetry_hz`.
 
+`duckdns` in `robot.yaml` is optional. When `enabled` is true, `robot_bridge` publishes this machine's public IPv4 to DuckDNS over IPv4 and does not send a private address. The robot resolves the same name, handshakes that IP, and writes it to the top of `data/server_ips.yaml` with the session time. Older rows stay below it. If DNS fails, the robot tries that list from top to bottom. `--server` with a literal IP dials that address and does not touch the file. The command socket is unchanged: the server still connects to `network.robot_ip`.
+
 `robot_bridge/clock_sync.py` maps the robot's monotonic clock onto ROS time by keeping the smallest `ros_time - client_time` sample. Scans are stamped with the capture time, not the time the server happens to publish them.
 
 The client converts commands with `calibration.py`:
@@ -146,4 +148,4 @@ Every LEO node uses `common/heartbeat.py` and publishes `/leo/heartbeat` (`node`
 
 `leo_server/common/config.py` is the only loader. A missing file, a missing key or an unknown key raises `ConfigError`. There are no default numbers in the loader. Tests override fields in memory instead of keeping a second yaml.
 
-`data/friends.json` is runtime data. Its path is `modes.friends_db`.
+`data/friends.json` is runtime data. Its path is `modes.friends_db`. `data/server_ips.yaml` is the robot's server address book. The client rewrites it after a DuckDNS session. It is not a second settings file.

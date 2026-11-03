@@ -13,12 +13,12 @@ from leo_protocol.protocol import HANDSHAKE_PORT, Command, Hello, Telemetry, pac
 
 
 class ClientLink:
-    def __init__(self, server_host: str) -> None:
+    def __init__(self, server_host: str, timeout_ms: int = 3000) -> None:
         self._host = server_host
         self._ctx = zmq.Context()
         self._hello = self._ctx.socket(zmq.REQ)
-        self._hello.setsockopt(zmq.RCVTIMEO, 3000)
-        self._hello.setsockopt(zmq.SNDTIMEO, 3000)
+        self._hello.setsockopt(zmq.RCVTIMEO, int(timeout_ms))
+        self._hello.setsockopt(zmq.SNDTIMEO, int(timeout_ms))
         self._hello.setsockopt(zmq.LINGER, 0)
         self._hello.connect(f"tcp://{server_host}:{HANDSHAKE_PORT}")
         self._telemetry = None

@@ -1,4 +1,9 @@
-"""Robot entry point. The only required argument is the server address."""
+"""Robot entry point.
+
+Pass ``--server`` as an IP to dial that host directly. Pass a DuckDNS name,
+or omit it and set ``domain`` in ``data/server_ips.yaml``, to resolve the
+server and remember the address.
+"""
 
 from __future__ import annotations
 
@@ -20,7 +25,8 @@ def _bootstrap() -> None:
 def main() -> None:
     _bootstrap()
     parser = argparse.ArgumentParser(description="LEO2 robot client")
-    parser.add_argument("--server", required=True, help="server hostname or IP")
+    parser.add_argument("--server", default="", help="server IP, or DuckDNS name. Default: domain in the address book")
+    parser.add_argument("--addresses", default="", help="yaml address book. Default: data/server_ips.yaml")
     parser.add_argument("--sim", default="", help="run the mock robot in this world")
     parser.add_argument("--show", action="store_true", help="show the mock top-down window")
     parser.add_argument("--route", action="store_true", help="play the scripted route from the server config")
@@ -29,7 +35,7 @@ def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
     from leo_client.session import open_session
 
-    open_session(args.server, args.sim, args.show, args.route, args.duration)
+    open_session(args.server, args.sim, args.show, args.route, args.duration, args.addresses or None)
 
 
 if __name__ == "__main__":

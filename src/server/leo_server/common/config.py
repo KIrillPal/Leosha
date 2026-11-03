@@ -203,6 +203,19 @@ def _network(value, path: str) -> dict:
     return parsed
 
 
+def _duckdns(value, path: str) -> dict:
+    spec = {
+        "enabled": _BOOL,
+        "domain": _STR,
+        "token": _STR,
+        "update_sec": _FLOAT,
+    }
+    parsed = _section(_mapping(value, path), spec, path)
+    if parsed["update_sec"] <= 0:
+        raise ConfigError(f"{path}.update_sec must be positive")
+    return parsed
+
+
 def _geometry(value, path: str) -> dict:
     spec = {
         "wheelbase_m": _FLOAT,
@@ -489,6 +502,7 @@ def _sim(value, path: str) -> dict:
 
 _ROOT = {
     "network": _network,
+    "duckdns": _duckdns,
     "client": _client,
     "geometry": _geometry,
     "modes": _modes,
@@ -506,6 +520,7 @@ class RobotConfig:
     path: Path
     root: Path
     network: dict
+    duckdns: dict
     client: dict
     geometry: dict
     modes: dict
@@ -568,6 +583,7 @@ def load_config(path: str | Path) -> RobotConfig:
         path=config_path.resolve(),
         root=config_path.resolve().parent.parent,
         network=parsed["network"],
+        duckdns=parsed["duckdns"],
         client=parsed["client"],
         geometry=parsed["geometry"],
         modes=parsed["modes"],

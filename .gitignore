@@ -33,3 +33,7 @@ notes
 **/server_state.yaml
 
 **/*.pt
+
+# env
+data/
+.env

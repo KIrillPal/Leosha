@@ -5,7 +5,10 @@ from __future__ import annotations
 import logging
 import threading
 import time
+from pathlib import Path
 
+from leo_client.addresses import AddressBook, default_book_path, plan_targets
+from leo_protocol.duckdns import is_ipv4
 from leo_client.calibration import (
     pan_command_deg,
     pan_servo_deg,
@@ -186,10 +189,48 @@ class Session:
             LOGGER.debug("telemetry dropped", exc_info=True)
 
 
-def open_session(server: str, sim_world: str, show: bool, route: bool, duration_sec: float) -> None:
-    link = ClientLink(server)
+def open_link(server: str, sim_world: str, addresses: str | None = None, timeout_ms: int = 3000, resolve=None):
+    chosen = server.strip()
+    hello = Hello(client_time_ns=time.monotonic_ns(), sim=bool(sim_world), world=sim_world)
+    if chosen and is_ipv4(chosen):
+        LOGGER.info("direct server %s", chosen)
+        link = ClientLink(chosen, timeout_ms)
+        try:
+            return link, link.handshake(hello)
+        except Exception:
+            link.close()
+            raise
+    path = Path(addresses) if addresses else default_book_path()
+    book = AddressBook.load(path)
+    if resolve is None:
+        targets, host = plan_targets(server, book)
+    else:
+        targets, host = plan_targets(server, book, resolve)
+    LOGGER.info("duckdns %s via %s (%s)", host, path, ", ".join(targets))
+    errors: list[str] = []
+    for ip in targets:
+        link = ClientLink(ip, timeout_ms)
+        try:
+            reply = link.handshake(hello)
+        except Exception as exc:
+            errors.append(f"{ip}: {exc}")
+            LOGGER.warning("handshake %s failed: %s", ip, exc)
+            link.close()
+            continue
+        try:
+            book.remember(ip, domain=host if not book.domain else None)
+        except Exception:
+            link.close()
+            raise
+        LOGGER.info("saved server %s session to %s", ip, book.path)
+        return link, reply
+    detail = "; ".join(errors) if errors else "no addresses"
+    raise RuntimeError(f"could not open a session ({detail})")
+
+
+def open_session(server: str, sim_world: str, show: bool, route: bool, duration_sec: float, addresses: str | None = None) -> None:
+    link, reply = open_link(server, sim_world, addresses)
     try:
-        reply = link.handshake(Hello(client_time_ns=time.monotonic_ns(), sim=bool(sim_world), world=sim_world))
         client_cfg = reply["client"]
         network_ports = reply["ports"]
         link.open_streams(int(network_ports["telemetry_port"]), int(network_ports["command_port"]))

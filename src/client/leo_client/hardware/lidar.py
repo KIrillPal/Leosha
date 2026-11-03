@@ -39,29 +39,30 @@ class Lidar:
             self._thread.join(timeout=2.0)
 
     def _run(self) -> None:
-        import ydlidar
+        # import ydlidar
 
-        ydlidar.os_init()
-        port = "/dev/ydlidar"
-        for _key, value in ydlidar.lidarPortList().items():
-            port = value
-        laser = ydlidar.CYdLidar()
-        self._configure(ydlidar, laser, port)
-        if not laser.initialize() or not laser.turnOn():
-            raise RuntimeError(f"lidar failed to start on {port}")
-        scan = ydlidar.LaserScan()
-        period = 1.0 / float(self._cfg["scan_hz"])
-        try:
-            while not self._stop.is_set():
-                started = time.monotonic()
-                if laser.doProcessSimple(scan):
-                    built = self._build(scan)
-                    with self._lock:
-                        self._scan = built
-                time.sleep(max(0.0, period - (time.monotonic() - started)))
-        finally:
-            laser.turnOff()
-            laser.disconnecting()
+        # ydlidar.os_init()
+        # port = "/dev/ydlidar"
+        # for _key, value in ydlidar.lidarPortList().items():
+        #     port = value
+        # laser = ydlidar.CYdLidar()
+        # self._configure(ydlidar, laser, port)
+        # if not laser.initialize() or not laser.turnOn():
+        #     raise RuntimeError(f"lidar failed to start on {port}")
+        # scan = ydlidar.LaserScan()
+        # period = 1.0 / float(self._cfg["scan_hz"])
+        # try:
+        #     while not self._stop.is_set():
+        #         started = time.monotonic()
+        #         if laser.doProcessSimple(scan):
+        #             built = self._build(scan)
+        #             with self._lock:
+        #                 self._scan = built
+        #         time.sleep(max(0.0, period - (time.monotonic() - started)))
+        # finally:
+        #     laser.turnOff()
+        #     laser.disconnecting()
+        pass
 
     def _configure(self, ydlidar, laser, port: str) -> None:
         cfg = self._cfg

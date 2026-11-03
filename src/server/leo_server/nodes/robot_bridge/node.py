@@ -18,6 +18,7 @@ from leo_server.common.config import config_from_env
 from leo_server.common.drive import drive_type, fill_drive, read_drive
 from leo_server.common.heartbeat import Heartbeat, LoopRate
 from leo_server.nodes.robot_bridge.clock_sync import ClockSync
+from leo_server.nodes.robot_bridge.duckdns import DuckDns
 from leo_server.nodes.robot_bridge.link import ServerLink, reply_bytes
 
 
@@ -50,6 +51,7 @@ class RobotBridge(Node):
             ports["command_port"],
             ports["robot_ip"],
         )
+        self._duckdns = None
         self._time_sync = ClockSync()
         self._heartbeat = Heartbeat(self)
         self._cycle = LoopRate()
@@ -79,6 +81,7 @@ class RobotBridge(Node):
         self.create_timer(0.02, self._repeat_command)
         self.create_timer(1.0, self._publish_stats)
         self._link.start(self._on_hello)
+        self._duckdns = DuckDns.start_from(config.duckdns, self.get_logger())
         self.get_logger().info("robot bridge listening")
 
     def _on_hello(self, hello, server_time_ns: int) -> bytes:
@@ -228,6 +231,8 @@ class RobotBridge(Node):
         self._status_pub.publish(status)
 
     def destroy_node(self):
+        if self._duckdns is not None:
+            self._duckdns.close()
         self._link.close()
         return super().destroy_node()
 

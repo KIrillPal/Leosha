@@ -10,6 +10,12 @@ network:
   handshake_port: 5551
   command_port: 5552
 
+duckdns:
+  enabled: true
+  domain: "ipleo.duckdns.org"
+  token: ""
+  update_sec: 300.0
+
 client:
   command_hz: 100.0
   telemetry_hz: 30.0

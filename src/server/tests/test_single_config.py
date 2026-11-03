@@ -13,10 +13,13 @@ def test_only_robot_yaml_holds_settings():
         if any(part in {".git", "logs", "__pycache__"} for part in path.parts):
             continue
         found.append(path.relative_to(ROOT).as_posix())
-    assert found == ["config/robot.yaml", "environment.yml"] or set(found) <= {
+    allowed = {
         "config/robot.yaml",
         "environment.yml",
+        # Robot runtime data, same role as data/friends.json. Not a second settings file.
+        "data/server_ips.yaml",
     }
+    assert set(found) <= allowed
     assert "config/robot.yaml" in found
 
 
