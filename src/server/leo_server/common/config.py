@@ -187,6 +187,7 @@ def _client(value, path: str) -> dict:
         "telemetry_hz": _FLOAT,
         "module_check_sec": _positive,
         "waiting_timeout_sec": _positive,
+        "known_ip_sec": _positive,
         "wait_limit_sec": _positive,
         "watchdog": _watchdog,
         "calibration": _calibration,

@@ -1,8 +1,9 @@
 """One session: find the server, then apply commands and publish sensors.
 
-Silence longer than ``waiting_timeout_sec`` is ``waiting``. After ``wait_limit_sec``
-the session ends so the caller can search for the server again. Every exit
-returns each actuator to its standard position on a two-second sine ramp.
+Silence longer than ``waiting_timeout_sec`` is ``waiting``. The last successful
+address is probed for ``known_ip_sec``. The whole search stays inside
+``wait_limit_sec``. Every exit returns each actuator to its standard position
+on a two-second sine ramp.
 """
 
 from __future__ import annotations
@@ -11,6 +12,7 @@ import logging
 import os
 import threading
 import time
+from datetime import datetime
 from pathlib import Path
 
 from leo_client.addresses import AddressBook, default_book_path, plan_targets
@@ -36,8 +38,8 @@ _CONNECTED = "connected"
 _WAITING = "waiting"
 
 
-def link_timing(path: str | Path | None = None) -> tuple[float, float]:
-    """Return ``waiting_timeout_sec`` and ``wait_limit_sec`` from the robot config."""
+def link_timing(path: str | Path | None = None) -> tuple[float, float, float]:
+    """Return the silence limit, the last-address probe, and the search budget."""
     if path:
         chosen = Path(path)
     else:
@@ -47,19 +49,34 @@ def link_timing(path: str | Path | None = None) -> tuple[float, float]:
 
     client = yaml.safe_load(chosen.read_text(encoding="utf-8"))["client"]
     waiting = float(client["waiting_timeout_sec"])
+    known = float(client["known_ip_sec"])
     limit = float(client["wait_limit_sec"])
-    if waiting <= 0 or limit <= 0:
-        raise ValueError("waiting_timeout_sec and wait_limit_sec must be positive")
-    return waiting, limit
+    if waiting <= 0 or known <= 0 or limit <= 0:
+        raise ValueError("client search times must be positive")
+    return waiting, known, limit
+
+
+def attempt_timeouts(count: int, budget_sec: float, first_sec: float | None = None) -> list[float]:
+    """Split ``budget_sec`` across ``count`` dials. The first dial can be shorter."""
+    if count <= 0 or budget_sec <= 0:
+        return []
+    if first_sec is None:
+        share = budget_sec / count
+        return [share] * count
+    first = min(float(first_sec), budget_sec)
+    if count == 1:
+        return [first]
+    share = max(0.0, budget_sec - first) / (count - 1)
+    return [first, *([share] * (count - 1))]
 
 
 class LinkPhase:
     """Connected, then waiting, then a request to search again."""
 
-    def __init__(self, waiting_timeout_sec: float, wait_limit_sec: float, clock=time.monotonic) -> None:
+    def __init__(self, waiting_timeout_sec: float, known_ip_sec: float, clock=time.monotonic) -> None:
         self.phase = _CONNECTED
         self._waiting_timeout_sec = float(waiting_timeout_sec)
-        self._wait_limit_sec = float(wait_limit_sec)
+        self._known_ip_sec = float(known_ip_sec)
         self._clock = clock
         self._last_heard = clock()
         self._waiting_since = 0.0
@@ -79,7 +96,7 @@ class LinkPhase:
             self.phase = _WAITING
             self._waiting_since = now
             return "lost"
-        if self.phase == _WAITING and now - self._waiting_since >= self._wait_limit_sec:
+        if self.phase == _WAITING and now - self._waiting_since >= self._known_ip_sec:
             self.phase = "searching"
             return "search"
         return None
@@ -107,6 +124,51 @@ class _Route:
         return self._index >= len(self._steps)
 
 
+class LostWait:
+    """One ``Lost connection`` line, rewritten in place while the search runs."""
+
+    def __init__(self) -> None:
+        self.host = ""
+        self.active = False
+        self._since = 0.0
+        self._stamp: datetime | None = None
+        self._stop = threading.Event()
+        self._thread: threading.Thread | None = None
+
+    @property
+    def elapsed(self) -> float:
+        if not self.active:
+            return 0.0
+        return time.monotonic() - self._since
+
+    def start(self, host: str) -> None:
+        if self.active:
+            return
+        self.host = host
+        self._since = time.monotonic()
+        self._stamp = datetime.now()
+        self._stop.clear()
+        self.active = True
+        self._thread = threading.Thread(target=self._run, name="lost-wait", daemon=True)
+        self._thread.start()
+
+    def stop(self) -> None:
+        if not self.active:
+            return
+        self._stop.set()
+        if self._thread is not None:
+            self._thread.join(timeout=1.0)
+        console.close_line()
+        self.active = False
+
+    def _run(self) -> None:
+        while True:
+            elapsed = time.monotonic() - self._since
+            console.rewrite(console.lost_line(elapsed, now=self._stamp))
+            if self._stop.wait(0.1):
+                return
+
+
 class Session:
     def __init__(
         self,
@@ -117,6 +179,7 @@ class Session:
         servos,
         route: _Route | None,
         server_ip: str = "",
+        lost_wait: LostWait | None = None,
     ) -> None:
         self._link = link
         self._cfg = client_cfg
@@ -144,8 +207,9 @@ class Session:
         self._lidar_rate = Rate()
         self._telemetry_rate = Rate()
         self._lock = threading.Lock()
-        self._phase = LinkPhase(float(client_cfg["waiting_timeout_sec"]), float(client_cfg["wait_limit_sec"]))
+        self._phase = LinkPhase(float(client_cfg["waiting_timeout_sec"]), float(client_cfg["known_ip_sec"]))
         self._server_ip = server_ip
+        self._lost_wait = lost_wait if lost_wait is not None else LostWait()
         self._search = False
         self._modules: dict[str, bool] = {}
         self._checked_at = 0.0
@@ -195,13 +259,14 @@ class Session:
         if command is not None:
             if self._phase.heard() == "restored":
                 LOGGER.info("server link restored")
+                self._lost_wait.stop()
                 if self._server_ip:
                     console.write(console.connected_line(self._server_ip))
             return
         event = self._phase.poll()
         if event == "lost":
             LOGGER.warning("server link lost; waiting")
-            console.write(console.lost_line(float(self._cfg["wait_limit_sec"])))
+            self._lost_wait.start(self._server_ip)
             return
         if event == "search":
             LOGGER.warning("waiting expired; searching")
@@ -371,12 +436,27 @@ def _hello(host: str, sim_world: str) -> Hello:
     )
 
 
-def open_link(server: str, sim_world: str, addresses: str | None = None, timeout_ms: int = 3000, resolve=None):
+def open_link(
+    server: str,
+    sim_world: str,
+    addresses: str | None = None,
+    timeout_ms: int = 3000,
+    resolve=None,
+    *,
+    first_timeout_sec: float | None = None,
+    search_budget_sec: float | None = None,
+    skip_ip: str = "",
+):
     chosen = server.strip()
     if chosen and is_ipv4(chosen):
+        if chosen == skip_ip:
+            raise RuntimeError(f"could not open a session ({chosen} already checked)")
         hello = _hello(chosen, sim_world)
         LOGGER.info("direct server %s, robot address %s", chosen, hello.local_ip or "unknown")
-        link = ClientLink(chosen, timeout_ms)
+        dial_ms = _dial_ms(1, timeout_ms, first_timeout_sec, search_budget_sec)
+        if not dial_ms:
+            raise RuntimeError(f"could not open a session ({chosen} already checked)")
+        link = ClientLink(chosen, dial_ms[0])
         try:
             return link, link.handshake(hello)
         except Exception:
@@ -388,12 +468,15 @@ def open_link(server: str, sim_world: str, addresses: str | None = None, timeout
         attempts, host = plan_targets(server, book)
     else:
         attempts, host = plan_targets(server, book, resolve)
-    LOGGER.info("duckdns %s via %s (%s)", host, path, ", ".join(item.ip for item in attempts))
+    if skip_ip:
+        attempts = [item for item in attempts if item.ip != skip_ip]
+    LOGGER.info("duckdns %s via %s (%s)", host, path, ", ".join(item.ip for item in attempts) or "none")
     errors: list[str] = []
-    for attempt in attempts:
+    dial_ms = _dial_ms(len(attempts), timeout_ms, first_timeout_sec, search_budget_sec)
+    for attempt, dial in zip(attempts, dial_ms):
         hello = _hello(attempt.ip, sim_world)
         LOGGER.info("robot address %s via %s", hello.local_ip or "unknown", attempt.ip)
-        link = ClientLink(attempt.ip, timeout_ms)
+        link = ClientLink(attempt.ip, dial)
         try:
             reply = link.handshake(hello)
         except Exception as exc:
@@ -412,24 +495,69 @@ def open_link(server: str, sim_world: str, addresses: str | None = None, timeout
     raise RuntimeError(f"could not open a session ({detail})")
 
 
+def _dial_ms(count: int, timeout_ms: int, first_sec: float | None, budget_sec: float | None) -> list[int]:
+    if count <= 0 or (budget_sec is not None and budget_sec <= 0):
+        return []
+    if budget_sec is None:
+        return [int(timeout_ms)] * count
+    seconds = attempt_timeouts(count, budget_sec, first_sec)
+    return [max(1, int(round(item * 1000))) for item in seconds if item > 0]
+
+
+def _pause_for_budget(started: float, budget_sec: float) -> None:
+    pause = budget_sec - (time.monotonic() - started)
+    if pause < 0.05:
+        return
+    console.write(console.no_server_line(pause))
+    time.sleep(pause)
+
+
 def open_session(server: str, sim_world: str, show: bool, route: bool, duration_sec: float, addresses: str | None = None) -> None:
-    waiting_timeout, wait_limit = link_timing()
+    waiting_timeout, known_ip, wait_limit = link_timing()
+    lost_wait = LostWait()
     while True:
         LOGGER.info("searching")
+        started = time.monotonic()
         try:
-            link, reply = open_link(server, sim_world, addresses)
+            if lost_wait.active:
+                remaining = max(0.0, wait_limit - lost_wait.elapsed)
+                link, reply = open_link(
+                    server,
+                    sim_world,
+                    addresses,
+                    first_timeout_sec=None,
+                    search_budget_sec=remaining,
+                    skip_ip=lost_wait.host,
+                )
+            else:
+                link, reply = open_link(
+                    server,
+                    sim_world,
+                    addresses,
+                    first_timeout_sec=known_ip,
+                    search_budget_sec=wait_limit,
+                )
+            lost_wait.stop()
             console.write(console.connected_line(link.host))
         except Exception as exc:
-            LOGGER.warning("search failed (%s); retry in %.0fs", exc, wait_limit)
-            console.write(console.no_server_line(wait_limit))
-            time.sleep(wait_limit)
+            if lost_wait.active:
+                LOGGER.warning("search failed (%s)", exc)
+                remaining = wait_limit - lost_wait.elapsed
+                if remaining > 0:
+                    time.sleep(remaining)
+                lost_wait.stop()
+            else:
+                LOGGER.warning("search failed (%s); retry inside %.0fs", exc, wait_limit)
+                _pause_for_budget(started, wait_limit)
             continue
         reason = "done"
         try:
             client_cfg = dict(reply["client"])
             client_cfg.setdefault("waiting_timeout_sec", waiting_timeout)
+            client_cfg.setdefault("known_ip_sec", known_ip)
             client_cfg.setdefault("wait_limit_sec", wait_limit)
             waiting_timeout = float(client_cfg["waiting_timeout_sec"])
+            known_ip = float(client_cfg["known_ip_sec"])
             wait_limit = float(client_cfg["wait_limit_sec"])
             network_ports = reply["ports"]
             link.open_streams(int(network_ports["telemetry_port"]), int(network_ports["command_port"]))
@@ -438,13 +566,16 @@ def open_session(server: str, sim_world: str, show: bool, route: bool, duration_
             if body is not None:
                 body.start()
             try:
-                reason = Session(link, client_cfg, camera, lidar, servos, played, link.host).run(duration_sec)
+                reason = Session(
+                    link, client_cfg, camera, lidar, servos, played, link.host, lost_wait
+                ).run(duration_sec)
             finally:
                 if body is not None:
                     body.close()
         finally:
             link.close()
         if reason != "search":
+            lost_wait.stop()
             return
 
 

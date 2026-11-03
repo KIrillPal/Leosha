@@ -17,8 +17,10 @@ from leo_protocol.console import (
     logs_line,
     lost_line,
     no_server_line,
+    close_line,
     remember_output,
     report_exception,
+    rewrite,
     robot_connected_line,
     server_ready_line,
     short_name,
@@ -53,10 +55,31 @@ def test_server_startup_lines():
 def test_waiting_lines_highlight_the_duration():
     assert duration(30) == "30s"
     assert duration(1.5) == "1.5s"
-    lost = lost_line(30, now=WHEN)
-    assert f"{YELLOW}Lost connection. Waiting for {BRIGHT_YELLOW}30s{RESET}" in lost
+    lost = lost_line(1.5, now=WHEN)
+    assert "Waiting for" not in lost
+    assert f"{YELLOW}Lost connection. Waiting {BRIGHT_YELLOW}1.5s{RESET}" in lost
     waiting = no_server_line(1.5, now=WHEN)
     assert f"{YELLOW}No server. Waiting for {BRIGHT_YELLOW}1.5s{RESET}" in waiting
+
+
+def test_lost_line_rewrites_itself_with_a_carriage_return(monkeypatch):
+    import io
+
+    import leo_protocol.console as console
+
+    buffer = io.StringIO()
+    monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
+    monkeypatch.setattr(console, "_sink", lambda: (buffer, False))
+    rewrite(lost_line(1.0, now=WHEN))
+    rewrite(lost_line(2.0, now=WHEN))
+    close_line()
+    text = buffer.getvalue()
+    assert text.count("\r") == 2
+    assert text.endswith("\n")
+    assert "\033[K" in text
+    assert "Lost connection. Waiting" in text
+    assert f"{BRIGHT_YELLOW}2s{RESET}" in text
+    assert "Waiting for" not in text
 
 
 def test_robot_death_and_shutdown_use_one_style():

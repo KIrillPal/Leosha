@@ -20,7 +20,8 @@ def test_robot_yaml_loads():
     assert cfg.duckdns["global_ip"] == ""
     assert cfg.client["module_check_sec"] == 2.0
     assert cfg.client["waiting_timeout_sec"] == 1.5
-    assert cfg.client["wait_limit_sec"] == 30.0
+    assert cfg.client["known_ip_sec"] == 2.0
+    assert cfg.client["wait_limit_sec"] == 10.0
     assert cfg.web_ui["reply_timeout_sec"] == 2.0
 
 

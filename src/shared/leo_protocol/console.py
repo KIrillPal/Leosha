@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import os
 import sys
+import threading
 import traceback
 from datetime import datetime
 
@@ -25,6 +26,8 @@ RESET = "\033[0m"
 
 _TRACEBACK = "Traceback (most recent call last):"
 _STDERR_TAIL = 65536
+_WRITE = threading.Lock()
+_SAME_LINE = False
 
 
 def stamp(now: datetime | None = None) -> str:
@@ -55,8 +58,8 @@ def robot_connected_line(ip: str, *, now: datetime | None = None) -> str:
 
 
 def lost_line(seconds: float, *, now: datetime | None = None) -> str:
-    """Return the yellow line printed while a lost link is still waited on."""
-    body = f"{YELLOW}Lost connection. Waiting for {BRIGHT_YELLOW}{duration(seconds)}{RESET}"
+    """Return the yellow line whose stopwatch is how long the wait has lasted."""
+    body = f"{YELLOW}Lost connection. Waiting {BRIGHT_YELLOW}{duration(seconds)}{RESET}"
     return _line(body, now)
 
 
@@ -159,26 +162,58 @@ def report_exception(text: str, exc: BaseException) -> None:
 
 def write(text: str) -> None:
     """Print one already formatted console line."""
-    _emit(text)
+    with _WRITE:
+        _break_same_line()
+        _emit(text)
+
+
+def rewrite(text: str) -> None:
+    """Replace the current console line. The next ``write`` starts a new one."""
+    global _SAME_LINE
+    with _WRITE:
+        if not text or _suppressed():
+            return
+        _emit(f"\r{text}\033[K", newline=False)
+        _SAME_LINE = True
+
+
+def close_line() -> None:
+    """Finish a ``rewrite`` line so the next message is not drawn over it."""
+    with _WRITE:
+        _break_same_line()
 
 
 def write_raw(text: str) -> None:
     """Print ``text`` exactly, aside from a missing final newline."""
-    _emit(text)
+    with _WRITE:
+        _break_same_line()
+        _emit(text)
 
 
 def _line(message: str, now: datetime | None) -> str:
     return f"{WHITE}{stamp(now)}{RESET} {message}"
 
 
-def _emit(text: str) -> None:
-    if not text or _suppressed():
+def _break_same_line() -> None:
+    global _SAME_LINE
+    if not _SAME_LINE:
+        return
+    _SAME_LINE = False
+    _emit("", newline=True)
+
+
+def _emit(text: str, newline: bool = True) -> None:
+    if _suppressed():
+        return
+    if not text and not newline:
         return
     opened = _sink()
     if opened is None:
         return
     stream, owned = opened
-    payload = text if text.endswith("\n") else text + "\n"
+    payload = text
+    if newline and not payload.endswith("\n"):
+        payload += "\n"
     try:
         stream.write(payload)
         stream.flush()

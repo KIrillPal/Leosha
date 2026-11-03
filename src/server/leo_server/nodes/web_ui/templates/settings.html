@@ -14,12 +14,20 @@
     <label for="ip">Robot address</label>
     <input id="ip" type="text" placeholder="192.168.1.50" value="{{ robot_ip|default('', true) }}">
     <div style="margin-top:10px;"><button type="button" onclick="setIp()">Use this address</button></div>
-    <p class="hint">Status: <span class="metric" id="robotStatus">Waiting</span></p>
+    <p class="hint">Status: <span class="metric{% if robot_status == 'Connected' %} status-ok{% elif robot_status == 'Not responding' %} status-bad{% endif %}" id="robotStatus">{{ robot_status }}</span></p>
     <p class="hint" id="ipStatus">Taken from the client connection. The latest address is kept for this session.</p>
   </div>
   <div class="card">
     <label>Modules</label>
-    <div id="modules" class="hint">No report yet</div>
+    <div id="modules" class="{% if not modules %}hint{% endif %}">
+      {% if modules %}
+        {% for item in modules %}
+          <div>{{ item.name }} <span class="{{ 'status-ok' if item.ok else 'status-bad' }}">{{ 'ok' if item.ok else 'failed' }}</span></div>
+        {% endfor %}
+      {% else %}
+        No report yet
+      {% endif %}
+    </div>
   </div>
 </div>
 <script>
@@ -65,7 +73,7 @@ function showRobot(data) {
     box.append(row);
   });
 }
-setInterval(async () => {
+async function refresh() {
   const data = await (await fetch('/api/status')).json();
   markMode(data.mode);
   showRobot(data);
@@ -74,6 +82,8 @@ setInterval(async () => {
     field.value = data.robot_ip;
     document.getElementById('ipStatus').textContent = 'Using ' + data.robot_ip;
   }
-}, 500);
+}
+refresh();
+setInterval(refresh, 500);
 </script>
 {% endblock %}

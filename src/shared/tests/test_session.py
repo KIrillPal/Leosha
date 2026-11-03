@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from leo_client.calibration import pan_servo_deg, throttle_from_speed
-from leo_client.session import LinkPhase, Session
+from leo_client.session import LinkPhase, Session, attempt_timeouts
 from leo_server.common.config import load_config
 
 CFG = load_config(Path(__file__).resolve().parents[3] / "config" / "robot.yaml").client
@@ -15,10 +15,16 @@ class _Servos:
         self.args = (motor, steer, pan, tilt)
 
 
+def test_search_budget_gives_the_last_address_two_seconds():
+    assert attempt_timeouts(1, 10.0, 2.0) == [2.0]
+    assert attempt_timeouts(3, 10.0, 2.0) == [2.0, 4.0, 4.0]
+    assert attempt_timeouts(2, 8.0, None) == [4.0, 4.0]
+
+
 def test_silence_waits_then_asks_for_a_new_search():
     now = [0.0]
     lost = CFG["waiting_timeout_sec"]
-    limit = CFG["wait_limit_sec"]
+    limit = CFG["known_ip_sec"]
     phase = LinkPhase(lost, limit, clock=lambda: now[0])
     assert phase.poll() is None
     now[0] = lost
@@ -34,7 +40,7 @@ def test_silence_waits_then_asks_for_a_new_search():
 def test_a_command_during_waiting_restores_the_link():
     now = [0.0]
     lost = CFG["waiting_timeout_sec"]
-    phase = LinkPhase(lost, CFG["wait_limit_sec"], clock=lambda: now[0])
+    phase = LinkPhase(lost, CFG["known_ip_sec"], clock=lambda: now[0])
     now[0] = lost
     assert phase.poll() == "lost"
     now[0] = 2.0

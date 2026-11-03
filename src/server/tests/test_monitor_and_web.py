@@ -52,6 +52,17 @@ def test_monitor_page_matches_the_site_and_the_architecture_layout():
         assert name in html
 
 
+def test_settings_page_keeps_the_known_robot_report():
+    state = UiState(["pause"], "10.0.0.1")
+    state.note_reply(0.1, {"lidar": True, "camera": False})
+    html = create_app(state, lambda *_args: None).test_client().get("/").data
+    assert b'id="robotStatus">Connected' in html
+    assert b"lidar" in html
+    assert b"camera" in html
+    assert b">ok<" in html
+    assert b">failed<" in html
+
+
 def test_settings_renders_the_live_robot_ip():
     state = UiState(["pause"], "192.168.31.6")
     html = create_app(state, lambda *_args: None).test_client().get("/").data

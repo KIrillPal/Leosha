@@ -23,7 +23,10 @@ client:
   telemetry_hz: 30.0
   module_check_sec: 2.0
   waiting_timeout_sec: 1.5
-  wait_limit_sec: 30.0
+  # After the link goes quiet, keep probing the last successful server address.
+  known_ip_sec: 2.0
+  # Whole search, including that last address.
+  wait_limit_sec: 10.0
   watchdog:
     timeout_ms: 100.0
     critical_ms: 500.0
