@@ -16,7 +16,7 @@ from std_msgs.msg import String
 from tf2_ros import TransformBroadcaster
 
 from leo_protocol.duckdns import is_ipv4
-from leo_protocol.protocol import Command
+from leo_protocol.protocol import CAMERA, LIDAR, Command, module_failed
 from leo_server.common.config import config_from_env
 from leo_server.common.drive import drive_type, fill_drive, read_drive
 from leo_server.common.heartbeat import Heartbeat, LoopRate
@@ -70,6 +70,7 @@ class RobotBridge(Node):
         self._last_frame_id = None
         self._latency_ms = 0.0
         self._client_fps = {"loop": 0.0, "camera": 0.0, "lidar": 0.0, "telemetry": 0.0}
+        self._modules: dict[str, bool] = {}
         self._scan_pub = self.create_publisher(LaserScan, "/scan", 10)
         self._image_pub = self.create_publisher(CompressedImage, "/camera/image/compressed", 10)
         self._joint_pub = self.create_publisher(JointState, "/joint_states", 10)
@@ -155,6 +156,7 @@ class RobotBridge(Node):
             "lidar": packet.fps_lidar,
             "telemetry": packet.fps_telemetry,
         }
+        self._modules = dict(packet.modules)
         self._publish_applied(packet)
         self._publish_joints(packet)
         self._publish_scan(packet, ros_now)
@@ -199,7 +201,8 @@ class RobotBridge(Node):
 
     def _publish_scan(self, packet, ros_now: int) -> None:
         scan = packet.scan
-        if scan is None or scan.capture_time_ns == self._last_scan_id:
+        repeat = scan is None or scan.capture_time_ns == self._last_scan_id
+        if module_failed(self._modules, LIDAR) or repeat:
             return
         self._last_scan_id = scan.capture_time_ns
         stamp_ns = self._time_sync.to_ros_ns(scan.capture_time_ns)
@@ -218,7 +221,7 @@ class RobotBridge(Node):
         self._scan_pub.publish(message)
 
     def _publish_image(self, packet) -> None:
-        if not packet.jpeg or packet.frame_time_ns == self._last_frame_id:
+        if module_failed(self._modules, CAMERA) or not packet.jpeg or packet.frame_time_ns == self._last_frame_id:
             return
         self._last_frame_id = packet.frame_time_ns
         message = CompressedImage()
@@ -251,6 +254,7 @@ class RobotBridge(Node):
             {
                 "robot_ip": self._link.robot_ip,
                 "connected": self._last_scan_id is not None or self._last_frame_id is not None,
+                "modules": self._modules,
             }
         )
         self._status_pub.publish(status)

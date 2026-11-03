@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import math
 
 import rclpy
@@ -10,12 +11,14 @@ from geometry_msgs.msg import TransformStamped
 from nav_msgs.msg import Odometry
 from rclpy.node import Node
 from sensor_msgs.msg import Imu, LaserScan
+from std_msgs.msg import String
 from std_srvs.srv import Trigger
 from tf2_ros import TransformBroadcaster
 
 from leo_server.common.config import config_from_env
 from leo_server.common.drive import drive_type, read_drive
 from leo_server.common.heartbeat import Heartbeat
+from leo_server.nodes.odometry.sources import lidar_ranges
 from leo_server.nodes.odometry.tracker import Tracker
 
 
@@ -32,9 +35,11 @@ class OdometryNode(Node):
         self._pub = self.create_publisher(Odometry, "/odom", 10)
         self._last = self.get_clock().now()
         self._last_scan = None
+        self._modules: dict[str, bool] = {}
         self.create_subscription(drive_type(), "/robot/applied", self._on_applied, 10)
         self.create_subscription(LaserScan, "/scan", self._on_scan, 10)
         self.create_subscription(Imu, "/imu", self._on_imu, 10)
+        self.create_subscription(String, "/robot/status", self._on_status, 10)
         self.create_service(Trigger, "/odometry/reset", self._on_reset)
         period = 1.0 / float(config.odometry["publish_hz"])
         self.create_timer(period, self._tick)
@@ -46,11 +51,23 @@ class OdometryNode(Node):
     def _on_imu(self, message: Imu) -> None:
         self._tracker.gyro_z = float(message.angular_velocity.z)
 
+    def _on_status(self, message: String) -> None:
+        try:
+            payload = json.loads(message.data)
+        except json.JSONDecodeError:
+            return
+        modules = payload.get("modules")
+        if isinstance(modules, dict):
+            self._modules = {str(name): bool(ok) for name, ok in modules.items()}
+
     def _on_scan(self, message: LaserScan) -> None:
+        ranges = lidar_ranges(message.ranges, self._modules)
+        if ranges is None:
+            return
         stamp = message.header.stamp.sec + message.header.stamp.nanosec / 1e9
         dt = 0.1 if self._last_scan is None else max(0.0, stamp - self._last_scan)
         self._last_scan = stamp
-        self._tracker.observe_scan(message.ranges, float(message.angle_min), float(message.angle_increment), dt)
+        self._tracker.observe_scan(ranges, float(message.angle_min), float(message.angle_increment), dt)
 
     def _on_reset(self, _request, response):
         self._tracker.reset_memory()

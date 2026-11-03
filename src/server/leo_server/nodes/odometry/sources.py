@@ -11,6 +11,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 
+from leo_protocol.protocol import LIDAR, module_failed
 from leo_server.nodes.odometry.fusion import wrap_pi
 from leo_server.nodes.odometry.scan_matcher import match_scans, scan_points
 
@@ -80,6 +81,13 @@ def measure_visual(vo_delta, x: float, y: float, yaw: float, var_xy: float, var_
     """Future: compose a visual-odometry delta onto the current pose."""
     del vo_delta, x, y, yaw, var_xy, var_yaw
     return None
+
+
+def lidar_ranges(ranges, modules: dict | None):
+    """Scan bins for the matcher. A failed lidar contributes no measurement."""
+    if ranges is None or module_failed(modules, LIDAR):
+        return None
+    return ranges
 
 
 def prepare_scan(ranges, angle_min, increment, cfg):

@@ -6,6 +6,8 @@ import logging
 import threading
 import time
 
+from leo_client.modules import fresh
+
 LOGGER = logging.getLogger("leo.client.camera")
 
 
@@ -29,6 +31,15 @@ class Camera:
     def latest(self) -> tuple[bytes, int, int, int]:
         with self._lock:
             return self._jpeg, self._stamp_ns, self._width, self._height
+
+    def check(self) -> bool:
+        if not self._cfg.get("enabled", True):
+            return False
+        jpeg, stamp, _width, _height = self.latest()
+        if not jpeg:
+            return False
+        period = 1.0 / float(self._cfg["fps"])
+        return fresh(stamp, period)
 
     def close(self) -> None:
         self._stop.set()

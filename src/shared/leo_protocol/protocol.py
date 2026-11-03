@@ -8,13 +8,17 @@ handshake reply from ``config/robot.yaml``.
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import msgpack
 import numpy as np
 
 # Session entry port. robot.yaml network.handshake_port must equal this.
 HANDSHAKE_PORT = 5551
+
+# Wire names for modules whose samples the server can drop.
+LIDAR = "lidar"
+CAMERA = "camera"
 
 _PACK = {"use_bin_type": True}
 
@@ -67,6 +71,7 @@ class Telemetry:
     fps_lidar: float
     fps_telemetry: float
     ground_truth: tuple[float, float, float] | None
+    modules: dict[str, bool] = field(default_factory=dict)
 
 
 def pack_hello(hello: Hello) -> bytes:
@@ -191,6 +196,7 @@ def pack_telemetry(packet: Telemetry) -> tuple[bytes, bytes]:
         "fps_telemetry": float(packet.fps_telemetry),
         "ground_truth": truth,
         "jpeg_bytes": len(packet.jpeg),
+        "modules": {str(name): bool(ok) for name, ok in packet.modules.items()},
     }
     return msgpack.packb(header, **_PACK), bytes(packet.jpeg)
 
@@ -236,7 +242,21 @@ def unpack_telemetry(header: bytes, jpeg: bytes) -> Telemetry:
         fps_lidar=float(data["fps_lidar"]),
         fps_telemetry=float(data["fps_telemetry"]),
         ground_truth=ground,
+        modules=_modules_from(data.get("modules")),
     )
+
+
+def module_failed(modules: dict | None, name: str) -> bool:
+    """True only when this packet explicitly reports the module as down."""
+    if not modules:
+        return False
+    return modules.get(name) is False
+
+
+def _modules_from(raw) -> dict[str, bool]:
+    if not isinstance(raw, dict):
+        return {}
+    return {str(name): value is True for name, value in raw.items()}
 
 
 def finite_ranges(ranges: np.ndarray) -> np.ndarray:

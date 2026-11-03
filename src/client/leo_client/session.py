@@ -24,6 +24,7 @@ from leo_client.calibration import (
     tilt_servo_deg,
 )
 from leo_client.link import ClientLink, local_ipv4_toward
+from leo_client.modules import CAMERA, LIDAR, MOTOR, WHEEL_SERVO, format_modules, fresh
 from leo_client.rates import Rate
 from leo_client.watchdog import Watchdog
 from leo_protocol.protocol import Command, Hello, Telemetry
@@ -135,6 +136,8 @@ class Session:
         self._lock = threading.Lock()
         self._phase = LinkPhase(float(client_cfg["waiting_timeout_sec"]), float(client_cfg["wait_limit_sec"]))
         self._search = False
+        self._modules: dict[str, bool] = {}
+        self._checked_at = 0.0
 
     def run(self, duration_sec: float = 0.0) -> str:
         command_thread = None
@@ -144,6 +147,7 @@ class Session:
             self._camera.start()
             self._lidar.start()
             self._servos.start()
+            self._report_modules()
             command_thread = threading.Thread(target=self._command_loop, name="commands", daemon=True)
             telemetry_thread = threading.Thread(target=self._telemetry_loop, name="telemetry", daemon=True)
             command_thread.start()
@@ -211,13 +215,82 @@ class Session:
                 speed, steer = 0.0, 0.0
             else:
                 speed *= self._watchdog.speed_scale(elapsed_ms)
+        actuators = self._servo_states()
+        wheel_down = actuators.get(WHEEL_SERVO) is False
+        if actuators.get(MOTOR) is False:
+            speed = 0.0
+        if wheel_down:
+            steer = 0.0
         self._applied_speed, self._applied_steer = speed, steer
+        steer_throttle = 0.0 if wheel_down else steering_throttle(steer, self._cal)
         self._servos.apply(
             throttle_from_speed(speed, self._cal),
-            steering_throttle(steer, self._cal),
+            steer_throttle,
             pan_servo_deg(pan, self._cal),
             tilt_servo_deg(tilt, self._cal),
         )
+
+    def _report_modules(self) -> None:
+        self._modules = self._module_states()
+        self._checked_at = time.monotonic()
+        text = format_modules(self._modules)
+        if text:
+            print(text, flush=True)
+
+    def _refresh_modules(self, scan, jpeg: bytes, frame_stamp: int) -> None:
+        if self._should_probe(scan, jpeg, frame_stamp):
+            self._modules = self._module_states()
+            self._checked_at = time.monotonic()
+            return
+        self._modules.update(self._servo_states())
+
+    def _should_probe(self, scan, jpeg: bytes, frame_stamp: int) -> bool:
+        if self._modules_due() or self._lidar_stale(scan) or self._camera_stale(jpeg, frame_stamp):
+            return True
+        return self._modules.get(LIDAR) is False or self._modules.get(CAMERA) is False
+
+    def _modules_due(self) -> bool:
+        interval = float(self._cfg["module_check_sec"])
+        return time.monotonic() - self._checked_at >= interval
+
+    def _module_states(self) -> dict[str, bool]:
+        states: dict[str, bool] = {}
+        if self._sensor_on(LIDAR):
+            states[LIDAR] = bool(self._lidar.check())
+        if self._sensor_on(CAMERA):
+            states[CAMERA] = bool(self._camera.check())
+        states.update(self._servo_states())
+        return states
+
+    def _servo_states(self) -> dict[str, bool]:
+        check = getattr(self._servos, "check", None)
+        if not callable(check):
+            return {}
+        states = check()
+        if not isinstance(states, dict):
+            return {}
+        return {str(name): bool(ok) for name, ok in states.items()}
+
+    def _sensor_on(self, name: str) -> bool:
+        device = self._lidar if name == LIDAR else self._camera
+        section = self._cfg.get(name, {})
+        enabled = True if "enabled" not in section else bool(section["enabled"])
+        return enabled and callable(getattr(device, "check", None))
+
+    def _lidar_stale(self, scan) -> bool:
+        if not self._sensor_on(LIDAR):
+            return False
+        stamp = 0 if scan is None else int(scan.capture_time_ns)
+        period = 1.0 / float(self._cfg["lidar"]["scan_hz"])
+        return not fresh(stamp, period)
+
+    def _camera_stale(self, jpeg: bytes, frame_stamp: int) -> bool:
+        if not self._sensor_on(CAMERA):
+            return False
+        if not jpeg:
+            return True
+        period = 1.0 / float(self._cfg["camera"]["fps"])
+        return not fresh(int(frame_stamp), period)
 
     def _telemetry_loop(self) -> None:
         period = 1.0 / float(self._cfg["telemetry_hz"])
@@ -229,6 +302,11 @@ class Session:
     def _send(self) -> None:
         scan = self._lidar.latest()
         jpeg, frame_stamp, width, height = self._camera.latest()
+        self._refresh_modules(scan, jpeg, frame_stamp)
+        if self._modules.get(LIDAR) is False:
+            scan = None
+        if self._modules.get(CAMERA) is False:
+            jpeg = b""
         send_scan = scan if scan is not None and scan.capture_time_ns != self._sent_scan_stamp else None
         send_jpeg = jpeg if jpeg and frame_stamp != self._sent_frame_stamp else b""
         if send_scan is not None:
@@ -262,6 +340,7 @@ class Session:
             fps_lidar=self._lidar_rate.value,
             fps_telemetry=self._telemetry_rate.tick(),
             ground_truth=truth,
+            modules=dict(self._modules),
         )
         try:
             self._link.send(packet)

@@ -52,6 +52,8 @@ class Tracker:
         self._apply(self._visual())
 
     def observe_scan(self, ranges, angle_min: float, increment: float, dt: float) -> None:
+        if ranges is None:
+            return
         points = prepare_scan(ranges, angle_min, increment, self.cfg)
         if self.cfg["scan_match_enabled"] and self._previous is not None and len(points):
             seed = body_delta(self.speed_mps, self.steering_rad, max(dt, 1e-3), self.wheelbase_m)

@@ -2,9 +2,10 @@ import math
 
 import numpy as np
 
+from leo_protocol.protocol import LIDAR
 from leo_server.nodes.odometry.fusion import Fusion2D
 from leo_server.nodes.odometry.scan_matcher import match_scans, scan_points
-from leo_server.nodes.odometry.sources import measure_encoder, measure_imu, measure_visual
+from leo_server.nodes.odometry.sources import lidar_ranges, measure_encoder, measure_imu, measure_visual
 from leo_server.nodes.odometry.tracker import Tracker
 from leo_server.nodes.robot_bridge.clock_sync import ClockSync
 
@@ -96,3 +97,30 @@ def test_tracker_moves_with_applied_speed():
     for _ in range(10):
         tracker.step(0.1)
     assert tracker.fusion.x > 0.3
+
+
+def test_failed_lidar_contributes_no_ranges():
+    sample = [1.0, 2.0]
+    assert lidar_ranges(sample, {LIDAR: False}) is None
+    assert lidar_ranges(None, {LIDAR: True}) is None
+    assert lidar_ranges(sample, {}) is sample
+    assert lidar_ranges(sample, {LIDAR: True}) is sample
+
+
+def test_tracker_steps_when_the_lidar_sample_is_missing():
+    cfg = {
+        "process_noise_xy": 0.0,
+        "process_noise_yaw": 0.0,
+        "kinematic_enabled": True,
+        "kinematic_var_xy": 0.0001,
+        "kinematic_var_yaw": 0.0001,
+        "imu_enabled": False,
+        "encoder_enabled": False,
+        "visual_enabled": False,
+    }
+    tracker = Tracker(cfg, 0.16)
+    tracker.set_applied(0.4, 0.0)
+    tracker.observe_scan(None, -math.pi, 0.02, 0.1)
+    tracker.step(0.1)
+    assert tracker.fusion.x > 0.0
+    assert tracker._previous is None

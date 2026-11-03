@@ -10,6 +10,7 @@ import time
 import numpy as np
 
 from leo_client.hardware.scan_grid import resample
+from leo_client.modules import fresh
 from leo_protocol.protocol import Scan
 
 LOGGER = logging.getLogger("leo.client.lidar")
@@ -32,6 +33,15 @@ class Lidar:
     def latest(self) -> Scan | None:
         with self._lock:
             return self._scan
+
+    def check(self) -> bool:
+        if not self._cfg.get("enabled", True):
+            return False
+        scan = self.latest()
+        if scan is None:
+            return False
+        period = 1.0 / float(self._cfg["scan_hz"])
+        return fresh(scan.capture_time_ns, period)
 
     def close(self) -> None:
         self._stop.set()

@@ -6,6 +6,8 @@ import logging
 import math
 import time
 
+from leo_client.modules import ACTUATORS, FACE_SERVO, MOTOR, NECK_SERVO, WHEEL_SERVO
+
 LOGGER = logging.getLogger("leo.client.servos")
 
 # Every actuator returns to its standard output on one shared sine ramp.
@@ -18,20 +20,42 @@ class Servos:
         self._cfg = cfg
         self._calibration = calibration
         self._kit = None
+        self._ok = {name: True for name in ACTUATORS}
         self.motor_throttle = 0.0
         self.steering_throttle = 0.0
         self.pan_servo_deg = float(calibration["head_pan_zero_deg"])
         self.tilt_servo_deg = float(calibration["head_tilt_zero_deg"])
 
     def start(self) -> None:
+        try:
+            self._open()
+        except Exception:
+            LOGGER.exception("servos failed to start")
+            self._kit = None
+            self._fail_all()
+
+    def _open(self) -> None:
         from adafruit_servokit import ServoKit
 
         self._kit = ServoKit(channels=int(self._cfg["pca_channels"]), frequency=int(self._cfg["pca_frequency"]))
         self._set_motor_pulses(self._cfg["motor_channel"], self._cfg["motor_pwm_min"], self._cfg["motor_pwm_max"])
         self._set_motor_pulses(self._cfg["wheel_channel"], self._cfg["wheel_pwm_min"], self._cfg["wheel_pwm_max"])
-        self._set_servo(self._cfg["neck_channel"], self._cfg["neck_actuation_range"], self._cfg["neck_pwm_min"], self._cfg["neck_pwm_max"])
-        self._set_servo(self._cfg["face_channel"], self._cfg["face_actuation_range"], self._cfg["face_pwm_min"], self._cfg["face_pwm_max"])
+        self._set_servo(
+            self._cfg["neck_channel"],
+            self._cfg["neck_actuation_range"],
+            self._cfg["neck_pwm_min"],
+            self._cfg["neck_pwm_max"],
+        )
+        self._set_servo(
+            self._cfg["face_channel"],
+            self._cfg["face_actuation_range"],
+            self._cfg["face_pwm_min"],
+            self._cfg["face_pwm_max"],
+        )
         self.apply(self._neutral_throttle(), 0.0, self.pan_servo_deg, self.tilt_servo_deg)
+
+    def check(self) -> dict[str, bool]:
+        return {name: bool(self._ok[name]) for name in ACTUATORS}
 
     def _neutral_throttle(self) -> float:
         from leo_client.calibration import throttle_from_speed
@@ -49,16 +73,60 @@ class Servos:
             servo.set_pulse_width_range(int(low), int(high))
 
     def apply(self, motor_throttle: float, steering_throttle: float, pan_servo_deg: float, tilt_servo_deg: float) -> None:
-        self.motor_throttle = float(motor_throttle)
-        self.steering_throttle = float(steering_throttle)
-        self.pan_servo_deg = float(pan_servo_deg)
-        self.tilt_servo_deg = float(tilt_servo_deg)
         if self._kit is None:
+            self.motor_throttle = float(motor_throttle)
+            self.steering_throttle = float(steering_throttle)
             return
-        self._kit.continuous_servo[int(self._cfg["motor_channel"])].throttle = self.motor_throttle
-        self._kit.continuous_servo[int(self._cfg["wheel_channel"])].throttle = self.steering_throttle
-        self._kit.servo[int(self._cfg["neck_channel"])].angle = self.pan_servo_deg
-        self._kit.servo[int(self._cfg["face_channel"])].angle = self.tilt_servo_deg
+        self._commit(MOTOR, float(motor_throttle), self._write_motor)
+        self._commit(WHEEL_SERVO, float(steering_throttle), self._write_wheel)
+        if self._ok[NECK_SERVO]:
+            self._commit(NECK_SERVO, float(pan_servo_deg), self._write_neck)
+        if self._ok[FACE_SERVO]:
+            self._commit(FACE_SERVO, float(tilt_servo_deg), self._write_face)
+
+    def _commit(self, name: str, value: float, write) -> None:
+        try:
+            write(value)
+        except Exception:
+            self._fail(name)
+            return
+        self._ok[name] = True
+        self._remember(name, value)
+
+    def _fail(self, name: str) -> None:
+        if not self._ok[name]:
+            return
+        self._ok[name] = False
+        LOGGER.error("%s failed", name)
+
+    def _fail_all(self) -> None:
+        self._ok = {name: False for name in ACTUATORS}
+
+    def _remember(self, name: str, value: float) -> None:
+        if name == MOTOR:
+            self.motor_throttle = value
+        elif name == WHEEL_SERVO:
+            self.steering_throttle = value
+        elif name == NECK_SERVO:
+            self.pan_servo_deg = value
+        elif name == FACE_SERVO:
+            self.tilt_servo_deg = value
+
+    def _write_motor(self, throttle: float) -> None:
+        channel = int(self._cfg["motor_channel"])
+        self._kit.continuous_servo[channel].throttle = throttle
+
+    def _write_wheel(self, throttle: float) -> None:
+        channel = int(self._cfg["wheel_channel"])
+        self._kit.continuous_servo[channel].throttle = throttle
+
+    def _write_neck(self, angle: float) -> None:
+        channel = int(self._cfg["neck_channel"])
+        self._kit.servo[channel].angle = angle
+
+    def _write_face(self, angle: float) -> None:
+        channel = int(self._cfg["face_channel"])
+        self._kit.servo[channel].angle = angle
 
     def close(self) -> None:
         if self._kit is None:

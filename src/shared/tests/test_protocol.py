@@ -1,6 +1,23 @@
+import msgpack
 import numpy as np
 
-from leo_protocol.protocol import Command, Hello, Scan, Telemetry, pack_command, pack_hello, pack_reply, pack_telemetry, unpack_command, unpack_hello, unpack_reply, unpack_telemetry
+from leo_protocol.protocol import (
+    CAMERA,
+    LIDAR,
+    Command,
+    Hello,
+    Scan,
+    Telemetry,
+    module_failed,
+    pack_command,
+    pack_hello,
+    pack_reply,
+    pack_telemetry,
+    unpack_command,
+    unpack_hello,
+    unpack_reply,
+    unpack_telemetry,
+)
 
 
 def test_hello_and_command_round_trip():
@@ -32,13 +49,26 @@ def test_telemetry_keeps_nan_ranges_and_jpeg():
         fps_lidar=3,
         fps_telemetry=4,
         ground_truth=(1.0, 2.0, 0.5),
+        modules={LIDAR: True, "neck servo": False},
     )
     header, jpeg = pack_telemetry(packet)
     back = unpack_telemetry(header, jpeg)
     assert jpeg == b"jpeg"
     assert back.ground_truth == (1.0, 2.0, 0.5)
+    assert back.modules == {LIDAR: True, "neck servo": False}
     assert np.isnan(back.scan.ranges[1])
     assert abs(float(back.scan.ranges[0]) - 1.0) < 1e-6
+    data = msgpack.unpackb(header, raw=False)
+    del data["modules"]
+    bare = msgpack.packb(data, use_bin_type=True)
+    assert unpack_telemetry(bare, jpeg).modules == {}
+
+
+def test_a_missing_module_flag_does_not_count_as_failed():
+    assert module_failed({}, LIDAR) is False
+    assert module_failed(None, LIDAR) is False
+    assert module_failed({LIDAR: True, CAMERA: False}, CAMERA) is True
+    assert module_failed({LIDAR: True}, LIDAR) is False
 
 
 def test_reply_carries_ports():

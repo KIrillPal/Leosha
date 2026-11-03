@@ -185,6 +185,7 @@ def _client(value, path: str) -> dict:
     spec = {
         "command_hz": _FLOAT,
         "telemetry_hz": _FLOAT,
+        "module_check_sec": _positive,
         "waiting_timeout_sec": _positive,
         "wait_limit_sec": _positive,
         "watchdog": _watchdog,

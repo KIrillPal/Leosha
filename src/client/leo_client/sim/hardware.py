@@ -10,6 +10,7 @@ import numpy as np
 
 from leo_client.calibration import pan_command_deg, throttle_from_speed, tilt_command_deg
 from leo_client.hardware.scan_grid import apply_blind_zone
+from leo_client.modules import ACTUATORS, FACE_SERVO, NECK_SERVO, fresh
 from leo_client.sim.camera_render import render
 from leo_client.sim.lidar_sim import cast_ranges
 from leo_client.sim.physics import step_pose
@@ -88,15 +89,21 @@ class SimServos:
         self.steering_throttle = 0.0
         self.pan_servo_deg = body.pan_servo
         self.tilt_servo_deg = body.tilt_servo
+        self._ok = {name: True for name in ACTUATORS}
 
     def start(self) -> None:
         return None
 
+    def check(self) -> dict[str, bool]:
+        return {name: bool(self._ok[name]) for name in ACTUATORS}
+
     def apply(self, motor_throttle: float, steering_throttle: float, pan_servo_deg: float, tilt_servo_deg: float) -> None:
         self.motor_throttle = float(motor_throttle)
         self.steering_throttle = float(steering_throttle)
-        self.pan_servo_deg = float(pan_servo_deg)
-        self.tilt_servo_deg = float(tilt_servo_deg)
+        if self._ok[NECK_SERVO]:
+            self.pan_servo_deg = float(pan_servo_deg)
+        if self._ok[FACE_SERVO]:
+            self.tilt_servo_deg = float(tilt_servo_deg)
         with self._body.lock:
             self._body.motor = self.motor_throttle
             self._body.steer = self.steering_throttle
@@ -135,6 +142,13 @@ class SimLidar:
     def latest(self) -> Scan | None:
         with self._lock:
             return self._scan
+
+    def check(self) -> bool:
+        scan = self.latest()
+        if scan is None:
+            return False
+        period = 1.0 / float(self._body.cfg["lidar"]["scan_hz"])
+        return fresh(scan.capture_time_ns, period)
 
     def close(self) -> None:
         self._stop.set()
@@ -192,6 +206,13 @@ class SimCamera:
     def latest(self) -> tuple[bytes, int, int, int]:
         with self._lock:
             return self._jpeg, self._stamp_ns, self._width, self._height
+
+    def check(self) -> bool:
+        jpeg, stamp, _width, _height = self.latest()
+        if not jpeg:
+            return False
+        period = 1.0 / float(self._body.cfg["camera_fps"])
+        return fresh(stamp, period)
 
     def close(self) -> None:
         self._stop.set()
