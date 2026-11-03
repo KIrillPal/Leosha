@@ -7,6 +7,7 @@ import threading
 import time
 
 from leo_client.modules import fresh
+from leo_protocol import console
 
 LOGGER = logging.getLogger("leo.client.camera")
 
@@ -86,7 +87,8 @@ class Camera:
                         self._jpeg = encoded.tobytes()
                         self._stamp_ns = time.monotonic_ns()
                 time.sleep(max(0.0, period - (time.monotonic() - started)))
-        except Exception:
+        except Exception as exc:
             LOGGER.exception("camera stopped")
+            console.report_exception("camera stopped", exc)
         finally:
             camera.stop()

@@ -14,6 +14,7 @@ import time
 from pathlib import Path
 
 from leo_client.addresses import AddressBook, default_book_path, plan_targets
+from leo_protocol import console
 from leo_protocol.duckdns import is_ipv4
 from leo_client.calibration import (
     pan_command_deg,
@@ -107,7 +108,16 @@ class _Route:
 
 
 class Session:
-    def __init__(self, link: ClientLink, client_cfg: dict, camera, lidar, servos, route: _Route | None) -> None:
+    def __init__(
+        self,
+        link: ClientLink,
+        client_cfg: dict,
+        camera,
+        lidar,
+        servos,
+        route: _Route | None,
+        server_ip: str = "",
+    ) -> None:
         self._link = link
         self._cfg = client_cfg
         self._cal = client_cfg["calibration"]
@@ -135,6 +145,7 @@ class Session:
         self._telemetry_rate = Rate()
         self._lock = threading.Lock()
         self._phase = LinkPhase(float(client_cfg["waiting_timeout_sec"]), float(client_cfg["wait_limit_sec"]))
+        self._server_ip = server_ip
         self._search = False
         self._modules: dict[str, bool] = {}
         self._checked_at = 0.0
@@ -184,10 +195,13 @@ class Session:
         if command is not None:
             if self._phase.heard() == "restored":
                 LOGGER.info("server link restored")
+                if self._server_ip:
+                    console.write(console.connected_line(self._server_ip))
             return
         event = self._phase.poll()
         if event == "lost":
             LOGGER.warning("server link lost; waiting")
+            console.write(console.lost_line(float(self._cfg["wait_limit_sec"])))
             return
         if event == "search":
             LOGGER.warning("waiting expired; searching")
@@ -235,7 +249,7 @@ class Session:
         self._checked_at = time.monotonic()
         text = format_modules(self._modules)
         if text:
-            print(text, flush=True)
+            console.write(text)
 
     def _refresh_modules(self, scan, jpeg: bytes, frame_stamp: int) -> None:
         if self._should_probe(scan, jpeg, frame_stamp):
@@ -404,8 +418,10 @@ def open_session(server: str, sim_world: str, show: bool, route: bool, duration_
         LOGGER.info("searching")
         try:
             link, reply = open_link(server, sim_world, addresses)
+            console.write(console.connected_line(link.host))
         except Exception as exc:
             LOGGER.warning("search failed (%s); retry in %.0fs", exc, wait_limit)
+            console.write(console.no_server_line(wait_limit))
             time.sleep(wait_limit)
             continue
         reason = "done"
@@ -422,7 +438,7 @@ def open_session(server: str, sim_world: str, show: bool, route: bool, duration_
             if body is not None:
                 body.start()
             try:
-                reason = Session(link, client_cfg, camera, lidar, servos, played).run(duration_sec)
+                reason = Session(link, client_cfg, camera, lidar, servos, played, link.host).run(duration_sec)
             finally:
                 if body is not None:
                     body.close()

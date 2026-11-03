@@ -42,6 +42,10 @@ class ClientLink:
         self._telemetry = None
         self._commands = None
 
+    @property
+    def host(self) -> str:
+        return self._host
+
     def handshake(self, hello: Hello) -> dict:
         self._hello.send(pack_hello(hello))
         return unpack_reply(self._hello.recv())

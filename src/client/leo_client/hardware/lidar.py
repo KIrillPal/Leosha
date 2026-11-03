@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import logging
 import math
+import os
+import sys
 import threading
 import time
 
@@ -14,6 +16,21 @@ from leo_client.modules import fresh
 from leo_protocol.protocol import Scan
 
 LOGGER = logging.getLogger("leo.client.lidar")
+
+
+def _silence_sdk_stdout() -> None:
+    """Drop YDLidar printf when stdout is the operator terminal.
+
+    A launch pipe stays attached, so the same text still lands in the log file.
+    """
+    if not sys.stdout.isatty():
+        return
+    devnull = os.open(os.devnull, os.O_WRONLY)
+    try:
+        os.dup2(devnull, 1)
+    finally:
+        os.close(devnull)
+    sys.stdout = open(os.devnull, "w", encoding="utf-8", errors="replace")
 
 
 class Lidar:
@@ -49,6 +66,7 @@ class Lidar:
             self._thread.join(timeout=2.0)
 
     def _run(self) -> None:
+        _silence_sdk_stdout()
         import ydlidar
 
         ydlidar.os_init()

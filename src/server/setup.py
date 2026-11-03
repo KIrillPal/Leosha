@@ -25,5 +25,8 @@ setup(
             "web_ui = leo_server.nodes.web_ui.node:main",
             "monitor = leo_server.nodes.monitor.node:main",
         ],
+        "ros2launch.option": [
+            "leo_console = leo_server.launch_screen:QuietLaunchScreen",
+        ],
     },
 )

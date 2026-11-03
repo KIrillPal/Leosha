@@ -1,0 +1,97 @@
+from datetime import datetime
+
+from leo_protocol.console import (
+    BRIGHT_GREEN,
+    BRIGHT_YELLOW,
+    GREEN,
+    RED,
+    RESET,
+    WHITE,
+    YELLOW,
+    connected_line,
+    died_line,
+    duration,
+    exception_text,
+    lost_line,
+    no_server_line,
+    remember_output,
+    report_exception,
+    robot_connected_line,
+    short_name,
+    shutdown_line,
+    traceback_text,
+    write,
+    write_raw,
+)
+
+WHEN = datetime(2026, 11, 3, 18, 32, 1, 123000)
+
+
+def test_lines_start_with_a_white_clock():
+    line = connected_line("192.168.1.10", now=WHEN)
+    assert line.startswith(f"{WHITE}18:32:01,123{RESET} ")
+    assert f"{GREEN}Connected to server {BRIGHT_GREEN}192.168.1.10{RESET}" in line
+
+
+def test_waiting_lines_highlight_the_duration():
+    assert duration(30) == "30s"
+    assert duration(1.5) == "1.5s"
+    lost = lost_line(30, now=WHEN)
+    assert f"{YELLOW}Lost connection. Waiting for {BRIGHT_YELLOW}30s{RESET}" in lost
+    waiting = no_server_line(1.5, now=WHEN)
+    assert f"{YELLOW}No server. Waiting for {BRIGHT_YELLOW}1.5s{RESET}" in waiting
+
+
+def test_robot_death_and_shutdown_use_one_style():
+    arrived = robot_connected_line("10.0.0.8", now=WHEN)
+    assert f"{GREEN}Robot is connected from {BRIGHT_GREEN}10.0.0.8{RESET}" in arrived
+    assert f"{RED}odometry{RESET} died" in died_line("odometry", now=WHEN)
+    stopped = shutdown_line(now=WHEN)
+    assert stopped.endswith(" shutdown")
+    assert RED not in stopped
+    assert YELLOW not in stopped
+    assert GREEN not in stopped
+
+
+def test_process_names_drop_the_launch_suffix():
+    assert short_name("odometry-3") == "odometry"
+    assert short_name("static_transform_publisher-7") == "static_transform_publisher"
+    assert short_name("tf_laser") == "tf_laser"
+
+
+def test_traceback_text_is_raw_and_uncolored():
+    captured = "info line\nTraceback (most recent call last):\n  File \"x.py\", line 1, in f\nRuntimeError: boom\n"
+    raw = traceback_text(captured)
+    assert raw == "Traceback (most recent call last):\n  File \"x.py\", line 1, in f\nRuntimeError: boom\n"
+    assert "\033[" not in raw
+    assert "info line" not in raw
+    try:
+        raise RuntimeError("boom")
+    except RuntimeError as exc:
+        text = exception_text(exc)
+    assert text.startswith("Traceback (most recent call last):\n")
+    assert "\033[" not in text
+    assert "RuntimeError: boom" in text
+
+
+def test_stderr_tail_keeps_the_latest_traceback_only():
+    noise = "x" * 70000
+    kept = remember_output("", noise)
+    assert len(kept) == 65536
+    assert kept == noise[-65536:]
+    traced = remember_output(kept, "\nTraceback (most recent call last):\nError: boom\n")
+    assert traced.startswith("Traceback (most recent call last):")
+    assert not traced.startswith("x")
+
+
+def test_console_is_silent_during_pytest(monkeypatch):
+    def _forbidden():
+        raise AssertionError("console opened a stream during pytest")
+
+    monkeypatch.setattr("leo_protocol.console._sink", _forbidden)
+    write(connected_line("192.168.1.10", now=WHEN))
+    write_raw("Traceback (most recent call last):\n")
+    try:
+        raise RuntimeError("boom")
+    except RuntimeError as exc:
+        report_exception("camera stopped", exc)

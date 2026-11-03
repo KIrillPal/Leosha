@@ -1,4 +1,5 @@
 import time
+from datetime import datetime
 from pathlib import Path
 
 import numpy as np
@@ -33,14 +34,15 @@ def _scan(stamp_ns: int) -> Scan:
 
 
 def test_status_lines_color_ok_and_failed():
-    assert status_line(LIDAR, True) == "\033[32mOK\033[0m lidar"
-    assert status_line(NECK_SERVO, False) == "\033[31mFAILED\033[0m neck servo"
-    text = format_modules({LIDAR: True, CAMERA: True, NECK_SERVO: False})
+    moment = datetime(2026, 11, 3, 18, 32, 16, 10000)
+    assert status_line(LIDAR, True, now=moment) == "\033[37m18:32:16,010\033[0m \033[32mlidar\033[0m ok"
+    assert status_line(NECK_SERVO, False, now=moment) == "\033[37m18:32:16,010\033[0m \033[31mneck servo\033[0m failed"
+    text = format_modules({LIDAR: True, CAMERA: True, NECK_SERVO: False}, now=moment)
     assert text == "\n".join(
         (
-            status_line(LIDAR, True),
-            status_line(CAMERA, True),
-            status_line(NECK_SERVO, False),
+            status_line(LIDAR, True, now=moment),
+            status_line(CAMERA, True, now=moment),
+            status_line(NECK_SERVO, False, now=moment),
         )
     )
 
@@ -259,13 +261,15 @@ class _Sensor:
         return self._ok
 
 
-def test_startup_prints_colored_module_lines(capsys):
+def test_startup_prints_colored_module_lines(monkeypatch):
+    written: list[str] = []
+    monkeypatch.setattr("leo_client.session.console.write", written.append)
     camera = _Sensor(True, (b"", 0, 4, 2))
     lidar = _Sensor(False, None)
     board = _Board({MOTOR: True, WHEEL_SERVO: True, NECK_SERVO: False, FACE_SERVO: True})
     session = Session(_Link(), CFG, camera, lidar, board, None)
     assert session.run(duration_sec=0.05) == "done"
-    text = capsys.readouterr().out
-    assert status_line(LIDAR, False) in text
-    assert status_line(CAMERA, True) in text
-    assert status_line(NECK_SERVO, False) in text
+    text = "\n".join(written)
+    assert "\033[31mlidar\033[0m failed" in text
+    assert "\033[32mcamera\033[0m ok" in text
+    assert "\033[31mneck servo\033[0m failed" in text

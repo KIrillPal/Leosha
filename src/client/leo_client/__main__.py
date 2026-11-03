@@ -33,15 +33,27 @@ def main() -> None:
     parser.add_argument("--route", action="store_true", help="play the scripted route from the server config")
     parser.add_argument("--duration", type=float, default=0.0, help="stop after this many seconds")
     args = parser.parse_args()
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
+    _configure_logging()
     signal.signal(signal.SIGTERM, _end_session)
     from leo_client.session import open_session
 
     open_session(args.server, args.sim, args.show, args.route, args.duration, args.addresses or None)
 
 
+def _configure_logging() -> None:
+    if sys.stderr.isatty():
+        logger = logging.getLogger("leo")
+        logger.addHandler(logging.NullHandler())
+        logger.propagate = False
+        return
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
+
+
 def _end_session(signum: int, _frame: object) -> None:
     logging.getLogger("leo.client").info("signal %s, ending session", signum)
+    from leo_protocol.console import shutdown_line, write
+
+    write(shutdown_line())
     raise KeyboardInterrupt
 
 

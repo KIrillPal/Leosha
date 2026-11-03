@@ -16,6 +16,7 @@ import urllib.parse
 import urllib.request
 from dataclasses import dataclass
 
+from leo_protocol import console
 from leo_protocol.duckdns import hostname, is_ipv4, is_private_ipv4, subdomain
 
 
@@ -168,6 +169,7 @@ class DuckDns:
                 published = self.publish_once()
             except Exception as exc:
                 self._log.warning(f"duckdns update failed: {self._safe(exc)}")
+                console.write(console.warning_line("duckdns update failed"))
             else:
                 self._log.info(self._published(published))
             if self._stop.wait(self._update_sec):

@@ -2,15 +2,74 @@
 
 from __future__ import annotations
 
+import logging
 import math
 import os
 import sys
 from pathlib import Path
 
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, ExecuteProcess, OpaqueFunction
+from launch.actions import DeclareLaunchArgument, ExecuteProcess, OpaqueFunction, RegisterEventHandler
+from launch.event_handlers import OnProcessExit, OnProcessIO, OnShutdown
+from launch.logging import launch_config
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
+
+
+def _enable_shared() -> None:
+    for parent in Path(__file__).resolve().parents:
+        shared = parent / "src" / "shared"
+        if (shared / "leo_protocol" / "console.py").is_file():
+            entry = str(shared)
+            if entry not in sys.path:
+                sys.path.insert(0, entry)
+            return
+
+
+_enable_shared()
+
+from leo_protocol.console import (  # noqa: E402
+    died_line,
+    remember_output,
+    short_name,
+    shutdown_line,
+    traceback_text,
+    write,
+    write_raw,
+)
+
+_STDERR: dict[str, str] = {}
+
+
+def _quiet_launch_screen() -> None:
+    launch_config.get_screen_handler().setLevel(logging.CRITICAL)
+
+
+def _remember_stderr(event):
+    raw = event.text
+    if isinstance(raw, (bytes, bytearray)):
+        text = raw.decode("utf-8", errors="replace")
+    else:
+        text = str(raw)
+    name = event.process_name
+    _STDERR[name] = remember_output(_STDERR.get(name, ""), text)
+
+
+def _on_exit(event, context):
+    name = event.process_name
+    tail = _STDERR.pop(name, "")
+    if context.is_shutdown or event.returncode == 0:
+        return None
+    write(died_line(short_name(name)))
+    raw = traceback_text(tail)
+    if raw:
+        write_raw(raw)
+    return None
+
+
+def _on_shutdown(_event, _context):
+    write(shutdown_line())
+    return None
 
 
 def _default_config() -> str:
@@ -30,7 +89,27 @@ def _static_tf(x, y, z, yaw, parent, child) -> Node:
         package="tf2_ros",
         executable="static_transform_publisher",
         name=f"tf_{child}",
-        arguments=[str(x), str(y), str(z), qx, qy, qz, qw, parent, child],
+        output="own_log",
+        arguments=[
+            "--x",
+            str(x),
+            "--y",
+            str(y),
+            "--z",
+            str(z),
+            "--qx",
+            qx,
+            "--qy",
+            qy,
+            "--qz",
+            qz,
+            "--qw",
+            qw,
+            "--frame-id",
+            parent,
+            "--child-frame-id",
+            child,
+        ],
     )
 
 
@@ -84,12 +163,16 @@ def _nodes(context, *args, **kwargs):
 
 
 def generate_launch_description() -> LaunchDescription:
+    _quiet_launch_screen()
     return LaunchDescription(
         [
             DeclareLaunchArgument("config", default_value=_default_config()),
             DeclareLaunchArgument("sim", default_value=""),
             DeclareLaunchArgument("server", default_value=""),
             DeclareLaunchArgument("profile", default_value="false"),
+            RegisterEventHandler(OnShutdown(on_shutdown=_on_shutdown)),
+            RegisterEventHandler(OnProcessExit(on_exit=_on_exit)),
+            RegisterEventHandler(OnProcessIO(on_stderr=_remember_stderr)),
             OpaqueFunction(function=_nodes),
         ]
     )

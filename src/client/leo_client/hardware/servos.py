@@ -7,6 +7,7 @@ import math
 import time
 
 from leo_client.modules import ACTUATORS, FACE_SERVO, MOTOR, NECK_SERVO, WHEEL_SERVO
+from leo_protocol import console
 
 LOGGER = logging.getLogger("leo.client.servos")
 
@@ -25,14 +26,17 @@ class Servos:
         self.steering_throttle = 0.0
         self.pan_servo_deg = float(calibration["head_pan_zero_deg"])
         self.tilt_servo_deg = float(calibration["head_tilt_zero_deg"])
+        self._reported = False
 
     def start(self) -> None:
         try:
             self._open()
-        except Exception:
+        except Exception as exc:
             LOGGER.exception("servos failed to start")
+            console.report_exception("servos failed", exc)
             self._kit = None
             self._fail_all()
+        self._reported = True
 
     def _open(self) -> None:
         from adafruit_servokit import ServoKit
@@ -98,6 +102,8 @@ class Servos:
             return
         self._ok[name] = False
         LOGGER.error("%s failed", name)
+        if self._reported:
+            console.write(console.module_line(name, False))
 
     def _fail_all(self) -> None:
         self._ok = {name: False for name in ACTUATORS}
@@ -134,8 +140,9 @@ class Servos:
         start = (self.motor_throttle, self.steering_throttle, self.pan_servo_deg, self.tilt_servo_deg)
         try:
             ramp_outputs(self.apply, start, self.standard_pose())
-        except Exception:
+        except Exception as exc:
             LOGGER.exception("failed to park servos")
+            console.report_exception("park failed", exc)
 
     def standard_pose(self) -> tuple[float, float, float, float]:
         return (

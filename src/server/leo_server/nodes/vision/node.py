@@ -10,6 +10,7 @@ from rclpy.node import Node
 from sensor_msgs.msg import CompressedImage
 from std_msgs.msg import String
 
+from leo_protocol import console
 from leo_server.common.config import config_from_env
 from leo_server.common.heartbeat import Heartbeat
 from leo_server.nodes.vision.pipeline import FrameGate, PosePipeline
@@ -29,6 +30,7 @@ class VisionNode(Node):
             self.get_logger().info("vision model loaded")
         except Exception as exc:
             self.get_logger().error(f"vision model unavailable: {exc}")
+            console.write(console.failure_line("vision model unavailable"))
 
     def _on_image(self, message: CompressedImage) -> None:
         stamp = int(message.header.stamp.sec) * 1_000_000_000 + int(message.header.stamp.nanosec)

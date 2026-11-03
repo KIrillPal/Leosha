@@ -15,6 +15,7 @@ from sensor_msgs.msg import CompressedImage, Imu, JointState, LaserScan
 from std_msgs.msg import String
 from tf2_ros import TransformBroadcaster
 
+from leo_protocol import console
 from leo_protocol.duckdns import is_ipv4
 from leo_protocol.protocol import CAMERA, LIDAR, Command, module_failed
 from leo_server.common.config import config_from_env
@@ -97,6 +98,9 @@ class RobotBridge(Node):
     def _on_hello(self, hello, server_time_ns: int) -> bytes:
         self._adopt(getattr(hello, "local_ip", ""))
         self._publish_robot_ip()
+        ip = self._link.robot_ip or self._link.last_peer
+        if ip:
+            console.write(console.robot_connected_line(ip))
         sim = self._config.sim_payload(hello.world or "room") if hello.sim else None
         self._time_sync.observe(hello.client_time_ns, self.get_clock().now().nanoseconds)
         return reply_bytes(server_time_ns, hello, self._config.client_payload(), sim, self._config.network)
