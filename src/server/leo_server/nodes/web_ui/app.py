@@ -18,7 +18,10 @@ def create_app(state, publish) -> Flask:
 
     @app.get("/")
     def home():
-        return render_template("settings.html", modes=state.modes, mode=state.mode)
+        with state.lock:
+            mode = state.mode
+            robot_ip = state.robot_ip
+        return render_template("settings.html", modes=state.modes, mode=mode, robot_ip=robot_ip)
 
     @app.get("/teleop")
     def teleop():

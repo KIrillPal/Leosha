@@ -12,11 +12,17 @@ CFG = load_config(Path(__file__).resolve().parents[3] / "config" / "robot.yaml")
 
 def test_peer_address_keeps_the_ipv4_host():
     class _Frame:
+        def __init__(self, value):
+            self._value = value
+
         def get(self, key):
             assert key == "Peer-Address"
-            return "tcp://192.168.31.71:40000"
+            return self._value
 
-    assert peer_ipv4(_Frame()) == "192.168.31.71"
+    assert peer_ipv4(_Frame("tcp://192.168.31.71:40000")) == "192.168.31.71"
+    assert peer_ipv4(_Frame(b"tcp://192.168.31.232:40000")) == "192.168.31.232"
+    assert peer_ipv4(_Frame("tcp://[::ffff:192.168.31.6]:40000")) == "192.168.31.6"
+    assert peer_ipv4(_Frame("tcp://[::ffff:192.168.31.6]:40000".encode())) == "192.168.31.6"
     assert peer_ipv4(_FrameEmpty()) == ""
 
 

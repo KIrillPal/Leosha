@@ -37,9 +37,11 @@ markMode(document.getElementById('mode').textContent);
 setInterval(async () => {
   const data = await (await fetch('/api/status')).json();
   markMode(data.mode);
-  if (data.robot_ip && document.activeElement !== document.getElementById('ip')) {
-    document.getElementById('ip').value = data.robot_ip;
+  const field = document.getElementById('ip');
+  if (data.robot_ip && document.activeElement !== field && field.value !== data.robot_ip) {
+    field.value = data.robot_ip;
+    document.getElementById('ipStatus').textContent = 'Using ' + data.robot_ip;
   }
-}, 1000);
+}, 500);
 </script>
 {% endblock %}

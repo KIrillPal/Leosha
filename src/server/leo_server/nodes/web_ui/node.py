@@ -9,6 +9,7 @@ import threading
 import rclpy
 from nav_msgs.msg import OccupancyGrid
 from rclpy.node import Node
+from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from rclpy.parameter import Parameter
 from sensor_msgs.msg import CompressedImage, LaserScan
 from std_msgs.msg import String
@@ -19,6 +20,8 @@ from leo_server.nodes.mode_manager.modes import MODES
 from leo_server.nodes.web_ui.app import UiState, create_app
 from leo_server.nodes.web_ui.map_image import grid_png
 
+_LATCHED = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL, reliability=ReliabilityPolicy.RELIABLE)
+
 
 class WebUi(Node):
     def __init__(self, config) -> None:
@@ -27,13 +30,13 @@ class WebUi(Node):
         self._state.monitor_port = int(config.monitor["port"])
         self._heartbeat = Heartbeat(self)
         self._input_pub = self.create_publisher(String, "/teleop/input", 10)
-        self._ip_pub = self.create_publisher(String, "/leo/robot_ip", 10)
+        self._ip_pub = self.create_publisher(String, "/leo/robot_ip_set", 10)
         from rcl_interfaces.srv import SetParameters
 
         self._set_param_type = SetParameters
         self._mode_client = self.create_client(SetParameters, "/mode_manager/set_parameters")
         self.create_subscription(String, "/leo/mode", self._on_mode, 10)
-        self.create_subscription(String, "/leo/robot_ip", self._on_robot_ip, 10)
+        self.create_subscription(String, "/leo/robot_ip", self._on_robot_ip, _LATCHED)
         self.create_subscription(String, "/leo/ui", self._on_ui, 10)
         self.create_subscription(String, "/leo/system_stats", self._on_stats, 10)
         self.create_subscription(CompressedImage, "/camera/image/compressed", self._on_image, 10)
@@ -63,10 +66,11 @@ class WebUi(Node):
             self._input_pub.publish(message)
             return
         if kind == "ip":
-            message.data = str(payload)
+            ip = str(payload).strip()
+            message.data = ip
             self._ip_pub.publish(message)
             with self._state.lock:
-                self._state.robot_ip = str(payload)
+                self._state.robot_ip = ip
 
     def _on_robot_ip(self, message: String) -> None:
         ip = message.data.strip()

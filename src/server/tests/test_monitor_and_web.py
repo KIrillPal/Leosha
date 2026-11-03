@@ -52,6 +52,13 @@ def test_monitor_page_matches_the_site_and_the_architecture_layout():
         assert name in html
 
 
+def test_settings_renders_the_live_robot_ip():
+    state = UiState(["pause"], "192.168.31.6")
+    html = create_app(state, lambda *_args: None).test_client().get("/").data
+    assert b'value="192.168.31.6"' in html
+    assert b"data.robot_ip" in html
+
+
 def test_status_reports_the_robot_ip_held_in_memory():
     state = UiState(["pause"], "10.0.0.1")
     client = create_app(state, lambda *_args: None).test_client()

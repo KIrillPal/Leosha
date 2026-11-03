@@ -3,7 +3,7 @@
 
 network:
   bind_address: "0.0.0.0"
-  # Host the server uses when it connects back to the robot's command socket.
+  # First command-socket target. The client address replaces it on the first session.
   robot_ip: "127.0.0.1"
   telemetry_port: 5550
   # Session entry port. Must match leo_protocol.HANDSHAKE_PORT.

@@ -5,10 +5,12 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import threading
 
 import rclpy
 from geometry_msgs.msg import TransformStamped
 from rclpy.node import Node
+from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from sensor_msgs.msg import CompressedImage, Imu, JointState, LaserScan
 from std_msgs.msg import String
 from tf2_ros import TransformBroadcaster
@@ -20,6 +22,8 @@ from leo_server.common.heartbeat import Heartbeat, LoopRate
 from leo_server.nodes.robot_bridge.clock_sync import ClockSync
 from leo_server.nodes.robot_bridge.duckdns import DuckDns
 from leo_server.nodes.robot_bridge.link import ServerLink, reply_bytes
+
+_LATCHED = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL, reliability=ReliabilityPolicy.RELIABLE)
 
 
 def _stamp(node: Node, nanoseconds: int):
@@ -73,12 +77,14 @@ class RobotBridge(Node):
         self._status_pub = self.create_publisher(String, "/robot/status", 10)
         self._truth_pub = self.create_publisher(String, "/sim/ground_truth", 10)
         self._stats_pub = self.create_publisher(String, "/leo/system_stats", 10)
-        self._ip_pub = self.create_publisher(String, "/leo/robot_ip", 10)
-        self._published_ip = ports["robot_ip"]
+        self._ip_lock = threading.Lock()
+        self._ip_pub = self.create_publisher(String, "/leo/robot_ip", _LATCHED)
+        self._published_ip = ""
         self._tf = TransformBroadcaster(self)
         self.create_subscription(drive_type(), "/cmd/drive", self._on_drive, 10)
         self.create_subscription(JointState, "/cmd/head", self._on_head, 10)
-        self.create_subscription(String, "/leo/robot_ip", self._on_ip, 10)
+        self.create_subscription(String, "/leo/robot_ip_set", self._on_ip, 10)
+        self._publish_robot_ip()
         self.create_timer(0.01, self._poll)
         self.create_timer(0.02, self._repeat_command)
         self.create_timer(1.0, self._publish_stats)
@@ -88,6 +94,7 @@ class RobotBridge(Node):
 
     def _on_hello(self, hello, server_time_ns: int) -> bytes:
         self._adopt_peer()
+        self._publish_robot_ip()
         sim = self._config.sim_payload(hello.world or "room") if hello.sim else None
         self._time_sync.observe(hello.client_time_ns, self.get_clock().now().nanoseconds)
         return reply_bytes(server_time_ns, hello, self._config.client_payload(), sim, self._config.network)
@@ -107,6 +114,7 @@ class RobotBridge(Node):
 
     def _on_ip(self, message: String) -> None:
         self._link.set_robot_ip(message.data.strip())
+        self._publish_robot_ip()
 
     def _send_command(self) -> None:
         self._seq += 1
@@ -247,9 +255,10 @@ class RobotBridge(Node):
 
     def _publish_robot_ip(self) -> None:
         ip = self._link.robot_ip
-        if not ip or ip == self._published_ip:
-            return
-        self._published_ip = ip
+        with self._ip_lock:
+            if not ip or ip == self._published_ip:
+                return
+            self._published_ip = ip
         message = String()
         message.data = ip
         self._ip_pub.publish(message)

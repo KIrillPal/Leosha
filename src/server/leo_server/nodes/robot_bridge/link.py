@@ -19,16 +19,14 @@ class ServerLink:
         self._telemetry.setsockopt(zmq.RCVHWM, 20)
         self._telemetry.setsockopt(zmq.LINGER, 0)
         self._telemetry.bind(f"tcp://{bind}:{telemetry_port}")
-        self._commands = self._ctx.socket(zmq.PUB)
-        self._commands.setsockopt(zmq.SNDHWM, 4)
-        self._commands.setsockopt(zmq.LINGER, 0)
+        self._commands = None
         self._command_port = int(command_port)
-        self._robot_ip = robot_ip
-        self._commands.connect(f"tcp://{robot_ip}:{command_port}")
+        self._robot_ip = ""
+        self._lock = threading.Lock()
+        self._retarget(robot_ip.strip())
         self._handshake_addr = f"tcp://{bind}:{handshake_port}"
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
-        self._next_ip: str | None = None
         self.last_peer = ""
 
     def start(self, handler) -> None:
@@ -55,34 +53,38 @@ class ServerLink:
 
     @property
     def robot_ip(self) -> str:
-        if self._next_ip:
-            return self._next_ip
         return self._robot_ip
 
     def set_robot_ip(self, robot_ip: str) -> None:
+        """Point the command socket at ``robot_ip`` before the next command goes out."""
         robot_ip = robot_ip.strip()
-        if not robot_ip or robot_ip == self.robot_ip:
+        if not robot_ip:
             return
-        self._next_ip = robot_ip
+        with self._lock:
+            if robot_ip == self._robot_ip:
+                return
+            self._retarget(robot_ip)
+
+    def _retarget(self, robot_ip: str) -> None:
+        fresh = self._ctx.socket(zmq.PUB)
+        fresh.setsockopt(zmq.SNDHWM, 4)
+        fresh.setsockopt(zmq.LINGER, 0)
+        if robot_ip:
+            fresh.connect(f"tcp://{robot_ip}:{self._command_port}")
+        previous = self._commands
+        self._commands = fresh
+        self._robot_ip = robot_ip
+        if previous is not None:
+            previous.close(linger=0)
 
     def _remember_peer(self, frame) -> None:
         ip = peer_ipv4(frame)
         if ip:
             self.last_peer = ip
 
-    def _apply_ip(self) -> None:
-        robot_ip = self._next_ip
-        if robot_ip is None or robot_ip == self._robot_ip:
-            self._next_ip = None
-            return
-        self._commands.disconnect(f"tcp://{self._robot_ip}:{self._command_port}")
-        self._robot_ip = robot_ip
-        self._commands.connect(f"tcp://{robot_ip}:{self._command_port}")
-        self._next_ip = None
-
     def send_command(self, command) -> None:
-        self._apply_ip()
-        self._commands.send(pack_command(command), flags=zmq.NOBLOCK)
+        with self._lock:
+            self._commands.send(pack_command(command), flags=zmq.NOBLOCK)
 
     def poll(self) -> Telemetry | None:
         try:
@@ -96,8 +98,9 @@ class ServerLink:
         self._stop.set()
         if self._thread is not None:
             self._thread.join(timeout=1.0)
-        self._telemetry.close(linger=0)
-        self._commands.close(linger=0)
+        with self._lock:
+            self._telemetry.close(linger=0)
+            self._commands.close(linger=0)
         self._ctx.term()
 
 
@@ -110,7 +113,24 @@ def peer_ipv4(frame) -> str:
     if not raw:
         return ""
     text = raw.decode("utf-8", errors="replace") if isinstance(raw, (bytes, bytearray)) else str(raw)
-    host = text.split("://", 1)[-1].rsplit(":", 1)[0].strip("[]")
+    return ipv4_host(text)
+
+
+def ipv4_host(endpoint: str) -> str:
+    """Return an IPv4 address from a ZMQ peer endpoint, including IPv4-mapped IPv6."""
+    host = endpoint.strip()
+    if "://" in host:
+        host = host.split("://", 1)[1]
+    if host.startswith("["):
+        end = host.find("]")
+        host = host[1:end] if end > 1 else ""
+    elif host.count(":") == 1:
+        host = host.rsplit(":", 1)[0]
+    host = host.strip().lower()
+    if host.startswith("::ffff:"):
+        host = host[7:]
+        if host.count(":") == 1:
+            host = host.rsplit(":", 1)[0]
     if is_ipv4(host):
         return host
     return ""
