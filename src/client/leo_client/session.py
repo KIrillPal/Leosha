@@ -125,11 +125,12 @@ class _Route:
 
 
 class LostWait:
-    """One ``Lost connection`` line, rewritten in place while the search runs."""
+    """One waiting line, rewritten in place until the link returns."""
 
     def __init__(self) -> None:
         self.host = ""
         self.active = False
+        self._line = console.lost_line
         self._since = 0.0
         self._stamp: datetime | None = None
         self._stop = threading.Event()
@@ -141,12 +142,16 @@ class LostWait:
             return 0.0
         return time.monotonic() - self._since
 
-    def start(self, host: str) -> None:
-        if self.active:
+    def start(self, host: str = "", line=None) -> None:
+        chosen = line or console.lost_line
+        if self.active and chosen is self._line and host == self.host:
             return
         self.host = host
+        self._line = chosen
         self._since = time.monotonic()
         self._stamp = datetime.now()
+        if self.active:
+            return
         self._stop.clear()
         self.active = True
         self._thread = threading.Thread(target=self._run, name="lost-wait", daemon=True)
@@ -159,12 +164,13 @@ class LostWait:
         if self._thread is not None:
             self._thread.join(timeout=1.0)
         console.close_line()
+        self.host = ""
         self.active = False
 
     def _run(self) -> None:
         while True:
             elapsed = time.monotonic() - self._since
-            console.rewrite(console.lost_line(elapsed, now=self._stamp))
+            console.rewrite(self._line(elapsed, now=self._stamp))
             if self._stop.wait(0.1):
                 return
 
@@ -504,22 +510,22 @@ def _dial_ms(count: int, timeout_ms: int, first_sec: float | None, budget_sec: f
     return [max(1, int(round(item * 1000))) for item in seconds if item > 0]
 
 
-def _pause_for_budget(started: float, budget_sec: float) -> None:
+def _sleep_rest(started: float, budget_sec: float) -> None:
     pause = budget_sec - (time.monotonic() - started)
-    if pause < 0.05:
-        return
-    console.write(console.no_server_line(pause))
-    time.sleep(pause)
+    if pause >= 0.05:
+        time.sleep(pause)
 
 
 def open_session(server: str, sim_world: str, show: bool, route: bool, duration_sec: float, addresses: str | None = None) -> None:
+    console.write(console.robot_initializing_line())
     waiting_timeout, known_ip, wait_limit = link_timing()
     lost_wait = LostWait()
+    lost_wait.start(line=console.no_connection_line)
     while True:
         LOGGER.info("searching")
         started = time.monotonic()
         try:
-            if lost_wait.active:
+            if lost_wait.host:
                 remaining = max(0.0, wait_limit - lost_wait.elapsed)
                 link, reply = open_link(
                     server,
@@ -540,15 +546,16 @@ def open_session(server: str, sim_world: str, show: bool, route: bool, duration_
             lost_wait.stop()
             console.write(console.connected_line(link.host))
         except Exception as exc:
-            if lost_wait.active:
+            if lost_wait.host:
                 LOGGER.warning("search failed (%s)", exc)
                 remaining = wait_limit - lost_wait.elapsed
                 if remaining > 0:
                     time.sleep(remaining)
                 lost_wait.stop()
+                lost_wait.start(line=console.no_connection_line)
             else:
-                LOGGER.warning("search failed (%s); retry inside %.0fs", exc, wait_limit)
-                _pause_for_budget(started, wait_limit)
+                LOGGER.warning("search failed (%s)", exc)
+                _sleep_rest(started, wait_limit)
             continue
         reason = "done"
         try:

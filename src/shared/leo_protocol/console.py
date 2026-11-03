@@ -63,9 +63,9 @@ def lost_line(seconds: float, *, now: datetime | None = None) -> str:
     return _line(body, now)
 
 
-def no_server_line(seconds: float, *, now: datetime | None = None) -> str:
-    """Return the yellow line printed when the next search has to wait."""
-    body = f"{YELLOW}No server. Waiting for {BRIGHT_YELLOW}{duration(seconds)}{RESET}"
+def no_connection_line(seconds: float, *, now: datetime | None = None) -> str:
+    """Return the yellow line shown from startup until the first link."""
+    body = f"{YELLOW}No connection. Waiting {BRIGHT_YELLOW}{duration(seconds)}{RESET}"
     return _line(body, now)
 
 
@@ -91,6 +91,11 @@ def shutdown_line(*, now: datetime | None = None) -> str:
 def initializing_line(*, now: datetime | None = None) -> str:
     """Return the plain line printed when the server package starts."""
     return _line("Initializing ROS2 package", now)
+
+
+def robot_initializing_line(*, now: datetime | None = None) -> str:
+    """Return the plain line printed when the robot client starts."""
+    return _line("Initializing robot", now)
 
 
 def logs_line(path: str, *, now: datetime | None = None) -> str:

@@ -8,6 +8,7 @@ from leo_protocol.console import (
     RESET,
     WHITE,
     YELLOW,
+    close_line,
     connected_line,
     died_line,
     duration,
@@ -16,8 +17,8 @@ from leo_protocol.console import (
     initializing_line,
     logs_line,
     lost_line,
-    no_server_line,
-    close_line,
+    no_connection_line,
+    robot_initializing_line,
     remember_output,
     report_exception,
     rewrite,
@@ -42,6 +43,10 @@ def test_lines_start_with_a_white_clock():
 def test_server_startup_lines():
     started = initializing_line(now=WHEN)
     assert started.endswith(" Initializing ROS2 package")
+    robot = robot_initializing_line(now=WHEN)
+    assert robot.endswith(" Initializing robot")
+    assert RED not in robot
+    assert GREEN not in robot
     assert RED not in started
     assert GREEN not in started
     logs = logs_line("/home/kir/.ros/log/run/launch.log", now=WHEN)
@@ -58,8 +63,9 @@ def test_waiting_lines_highlight_the_duration():
     lost = lost_line(1.5, now=WHEN)
     assert "Waiting for" not in lost
     assert f"{YELLOW}Lost connection. Waiting {BRIGHT_YELLOW}1.5s{RESET}" in lost
-    waiting = no_server_line(1.5, now=WHEN)
-    assert f"{YELLOW}No server. Waiting for {BRIGHT_YELLOW}1.5s{RESET}" in waiting
+    waiting = no_connection_line(1.5, now=WHEN)
+    assert "Waiting for" not in waiting
+    assert f"{YELLOW}No connection. Waiting {BRIGHT_YELLOW}1.5s{RESET}" in waiting
 
 
 def test_lost_line_rewrites_itself_with_a_carriage_return(monkeypatch):
