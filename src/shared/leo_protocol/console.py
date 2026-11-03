@@ -90,6 +90,11 @@ def initializing_line(*, now: datetime | None = None) -> str:
     return _line("Initializing ROS2 package", now)
 
 
+def logs_line(path: str, *, now: datetime | None = None) -> str:
+    """Return the plain line that names the server log file."""
+    return _line(f"Logs {path}", now)
+
+
 def http_url(host: str, port: int) -> str:
     """Return a browser URL. A wildcard bind is shown as localhost."""
     shown = (host or "").strip()
@@ -189,9 +194,20 @@ def _suppressed() -> bool:
 
 
 def _sink():
+    """Open the operator terminal.
+
+    A node started by launch has a pipe for stderr, so the line must go to a
+    terminal device. ``setsid`` drops the controlling terminal, and then
+    ``/dev/tty`` no longer opens. ``LEO_TTY`` is that same device, saved by
+    the launcher before the new session starts.
+    """
     if sys.stderr.isatty():
         return sys.stderr, False
-    try:
-        return open("/dev/tty", "w", encoding="utf-8", errors="replace"), True
-    except OSError:
-        return None
+    for path in (os.environ.get("LEO_TTY", ""), "/dev/tty"):
+        if not path:
+            continue
+        try:
+            return open(path, "w", encoding="utf-8", errors="replace"), True
+        except OSError:
+            continue
+    return None

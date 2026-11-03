@@ -37,6 +37,7 @@ _enable_shared()
 from leo_protocol.console import (  # noqa: E402
     died_line,
     initializing_line,
+    logs_line,
     remember_output,
     short_name,
     shutdown_line,
@@ -173,6 +174,7 @@ def generate_launch_description() -> LaunchDescription:
     _quiet_launch_screen()
     if not os.environ.get("LEO_INIT_ANNOUNCED"):
         write(initializing_line())
+    write(logs_line(launch_config.get_log_file_path()))
     return LaunchDescription(
         [
             DeclareLaunchArgument("config", default_value=_default_config()),

@@ -14,6 +14,7 @@ from leo_protocol.console import (
     exception_text,
     http_url,
     initializing_line,
+    logs_line,
     lost_line,
     no_server_line,
     remember_output,
@@ -41,6 +42,9 @@ def test_server_startup_lines():
     assert started.endswith(" Initializing ROS2 package")
     assert RED not in started
     assert GREEN not in started
+    logs = logs_line("/home/kir/.ros/log/run/launch.log", now=WHEN)
+    assert logs.endswith(" Logs /home/kir/.ros/log/run/launch.log")
+    assert RED not in logs
     ready = server_ready_line(http_url("0.0.0.0", 8080), now=WHEN)
     assert f"{GREEN}Server is ready on {BRIGHT_GREEN}http://127.0.0.1:8080{RESET}" in ready
     assert http_url("192.168.1.10", 8080) == "http://192.168.1.10:8080"
@@ -95,6 +99,21 @@ def test_stderr_tail_keeps_the_latest_traceback_only():
     traced = remember_output(kept, "\nTraceback (most recent call last):\nError: boom\n")
     assert traced.startswith("Traceback (most recent call last):")
     assert not traced.startswith("x")
+
+
+def test_saved_terminal_is_used_when_stderr_is_a_pipe(monkeypatch, tmp_path):
+    import leo_protocol.console as console
+
+    target = tmp_path / "tty"
+    monkeypatch.setenv("LEO_TTY", str(target))
+    monkeypatch.setattr(console.sys.stderr, "isatty", lambda: False)
+    opened = console._sink()
+    assert opened is not None
+    stream, owned = opened
+    assert owned is True
+    stream.write("ready\n")
+    stream.close()
+    assert target.read_text() == "ready\n"
 
 
 def test_console_is_silent_during_pytest(monkeypatch):
