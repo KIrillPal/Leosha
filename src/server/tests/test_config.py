@@ -21,6 +21,7 @@ def test_robot_yaml_loads():
     assert cfg.client["module_check_sec"] == 2.0
     assert cfg.client["waiting_timeout_sec"] == 1.5
     assert cfg.client["wait_limit_sec"] == 30.0
+    assert cfg.web_ui["reply_timeout_sec"] == 2.0
 
 
 def test_missing_file_fails(tmp_path):

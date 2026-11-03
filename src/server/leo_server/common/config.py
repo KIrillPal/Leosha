@@ -445,8 +445,9 @@ def _vision(value, path: str) -> dict:
     return _section(_mapping(value, path), spec, path)
 
 
-def _host_port(value, path: str) -> dict:
-    return _section(_mapping(value, path), {"host": _STR, "port": _INT}, path)
+def _web_ui(value, path: str) -> dict:
+    spec = {"host": _STR, "port": _INT, "reply_timeout_sec": _positive}
+    return _section(_mapping(value, path), spec, path)
 
 
 def _monitor(value, path: str) -> dict:
@@ -523,7 +524,7 @@ _ROOT = {
     "odometry": _odometry,
     "slam_toolbox": _slam,
     "vision": _vision,
-    "web_ui": _host_port,
+    "web_ui": _web_ui,
     "monitor": _monitor,
     "sim": _sim,
 }

@@ -12,11 +12,14 @@ from leo_protocol.console import (
     died_line,
     duration,
     exception_text,
+    http_url,
+    initializing_line,
     lost_line,
     no_server_line,
     remember_output,
     report_exception,
     robot_connected_line,
+    server_ready_line,
     short_name,
     shutdown_line,
     traceback_text,
@@ -31,6 +34,16 @@ def test_lines_start_with_a_white_clock():
     line = connected_line("192.168.1.10", now=WHEN)
     assert line.startswith(f"{WHITE}18:32:01,123{RESET} ")
     assert f"{GREEN}Connected to server {BRIGHT_GREEN}192.168.1.10{RESET}" in line
+
+
+def test_server_startup_lines():
+    started = initializing_line(now=WHEN)
+    assert started.endswith(" Initializing ROS2 package")
+    assert RED not in started
+    assert GREEN not in started
+    ready = server_ready_line(http_url("0.0.0.0", 8080), now=WHEN)
+    assert f"{GREEN}Server is ready on {BRIGHT_GREEN}http://127.0.0.1:8080{RESET}" in ready
+    assert http_url("192.168.1.10", 8080) == "http://192.168.1.10:8080"
 
 
 def test_waiting_lines_highlight_the_duration():

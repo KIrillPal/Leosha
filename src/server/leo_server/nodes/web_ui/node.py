@@ -14,6 +14,7 @@ from rclpy.parameter import Parameter
 from sensor_msgs.msg import CompressedImage, LaserScan
 from std_msgs.msg import String
 
+from leo_protocol.console import http_url, server_ready_line, write
 from leo_server.common.config import config_from_env
 from leo_server.common.heartbeat import Heartbeat
 from leo_server.nodes.mode_manager.modes import MODES
@@ -26,7 +27,7 @@ _LATCHED = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL, reli
 class WebUi(Node):
     def __init__(self, config) -> None:
         super().__init__("web_ui")
-        self._state = UiState(list(MODES), config.network["robot_ip"])
+        self._state = UiState(list(MODES), config.network["robot_ip"], float(config.web_ui["reply_timeout_sec"]))
         self._state.monitor_port = int(config.monitor["port"])
         self._heartbeat = Heartbeat(self)
         self._input_pub = self.create_publisher(String, "/teleop/input", 10)
@@ -37,6 +38,7 @@ class WebUi(Node):
         self._mode_client = self.create_client(SetParameters, "/mode_manager/set_parameters")
         self.create_subscription(String, "/leo/mode", self._on_mode, 10)
         self.create_subscription(String, "/leo/robot_ip", self._on_robot_ip, _LATCHED)
+        self.create_subscription(String, "/robot/status", self._on_robot_status, 10)
         self.create_subscription(String, "/leo/ui", self._on_ui, 10)
         self.create_subscription(String, "/leo/system_stats", self._on_stats, 10)
         self.create_subscription(CompressedImage, "/camera/image/compressed", self._on_image, 10)
@@ -50,7 +52,10 @@ class WebUi(Node):
             daemon=True,
         )
         thread.start()
-        self.get_logger().info(f"web ui on {config.web_ui['host']}:{config.web_ui['port']}")
+        host = str(config.web_ui["host"])
+        port = int(config.web_ui["port"])
+        self.get_logger().info(f"web ui on {host}:{port}")
+        write(server_ready_line(http_url(host, port)))
 
     def _publish(self, kind: str, payload) -> None:
         if kind == "mode":
@@ -71,6 +76,19 @@ class WebUi(Node):
             self._ip_pub.publish(message)
             with self._state.lock:
                 self._state.robot_ip = ip
+
+    def _on_robot_status(self, message: String) -> None:
+        try:
+            payload = json.loads(message.data)
+        except json.JSONDecodeError:
+            return
+        if not isinstance(payload, dict):
+            return
+        age = payload.get("reply_age_sec")
+        modules = payload.get("modules")
+        if not isinstance(modules, dict):
+            modules = {}
+        self._state.note_reply(None if age is None else float(age), modules)
 
     def _on_robot_ip(self, message: String) -> None:
         ip = message.data.strip()

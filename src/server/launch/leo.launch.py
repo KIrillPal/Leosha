@@ -9,7 +9,13 @@ import sys
 from pathlib import Path
 
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, ExecuteProcess, OpaqueFunction, RegisterEventHandler
+from launch.actions import (
+    DeclareLaunchArgument,
+    ExecuteProcess,
+    OpaqueFunction,
+    RegisterEventHandler,
+    SetLaunchConfiguration,
+)
 from launch.event_handlers import OnProcessExit, OnProcessIO, OnShutdown
 from launch.logging import launch_config
 from launch.substitutions import LaunchConfiguration
@@ -30,6 +36,7 @@ _enable_shared()
 
 from leo_protocol.console import (  # noqa: E402
     died_line,
+    initializing_line,
     remember_output,
     short_name,
     shutdown_line,
@@ -164,12 +171,16 @@ def _nodes(context, *args, **kwargs):
 
 def generate_launch_description() -> LaunchDescription:
     _quiet_launch_screen()
+    if not os.environ.get("LEO_INIT_ANNOUNCED"):
+        write(initializing_line())
     return LaunchDescription(
         [
             DeclareLaunchArgument("config", default_value=_default_config()),
             DeclareLaunchArgument("sim", default_value=""),
             DeclareLaunchArgument("server", default_value=""),
             DeclareLaunchArgument("profile", default_value="false"),
+            SetLaunchConfiguration("sigterm_timeout", "1"),
+            SetLaunchConfiguration("sigkill_timeout", "1"),
             RegisterEventHandler(OnShutdown(on_shutdown=_on_shutdown)),
             RegisterEventHandler(OnProcessExit(on_exit=_on_exit)),
             RegisterEventHandler(OnProcessIO(on_stderr=_remember_stderr)),

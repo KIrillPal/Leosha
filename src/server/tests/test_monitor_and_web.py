@@ -3,7 +3,7 @@ from pathlib import Path
 
 from leo_server.nodes.monitor.app import create_monitor_app
 from leo_server.nodes.monitor.graph import Edge, build_view
-from leo_server.nodes.web_ui.app import UiState, create_app
+from leo_server.nodes.web_ui.app import UiState, create_app, robot_status
 
 
 def test_graph_marks_a_quiet_node_stale_and_keeps_client_fps_separate():
@@ -57,6 +57,28 @@ def test_settings_renders_the_live_robot_ip():
     html = create_app(state, lambda *_args: None).test_client().get("/").data
     assert b'value="192.168.31.6"' in html
     assert b"data.robot_ip" in html
+    assert b"robotStatus" in html
+    assert b"Modules" in html
+
+
+def test_robot_status_waits_then_connects_then_goes_quiet():
+    assert robot_status(None, 2.0) == "Waiting"
+    assert robot_status(2.0, 2.0) == "Connected"
+    assert robot_status(2.01, 2.0) == "Not responding"
+
+
+def test_status_reports_modules_in_display_order():
+    state = UiState(["pause"], "10.0.0.1", reply_timeout_sec=2.0)
+    state.note_reply(0.1, {"face servo": False, "lidar": True, "camera": True})
+    payload = create_app(state, lambda *_args: None).test_client().get("/api/status").get_json()
+    assert payload["robot_status"] == "Connected"
+    assert payload["modules"] == [
+        {"name": "lidar", "ok": True},
+        {"name": "camera", "ok": True},
+        {"name": "face servo", "ok": False},
+    ]
+    state.note_reply(3.0, {"lidar": True})
+    assert state.status_payload()["robot_status"] == "Not responding"
 
 
 def test_status_reports_the_robot_ip_held_in_memory():

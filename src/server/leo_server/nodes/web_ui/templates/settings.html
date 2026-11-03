@@ -14,7 +14,12 @@
     <label for="ip">Robot address</label>
     <input id="ip" type="text" placeholder="192.168.1.50" value="{{ robot_ip|default('', true) }}">
     <div style="margin-top:10px;"><button type="button" onclick="setIp()">Use this address</button></div>
+    <p class="hint">Status: <span class="metric" id="robotStatus">Waiting</span></p>
     <p class="hint" id="ipStatus">Taken from the client connection. The latest address is kept for this session.</p>
+  </div>
+  <div class="card">
+    <label>Modules</label>
+    <div id="modules" class="hint">No report yet</div>
   </div>
 </div>
 <script>
@@ -34,9 +39,36 @@ async function setIp() {
   document.getElementById('ipStatus').textContent = 'Using ' + ip;
 }
 markMode(document.getElementById('mode').textContent);
+function showRobot(data) {
+  const status = document.getElementById('robotStatus');
+  const text = data.robot_status || 'Waiting';
+  status.textContent = text;
+  status.className = 'metric';
+  if (text === 'Connected') status.classList.add('status-ok');
+  if (text === 'Not responding') status.classList.add('status-bad');
+  const box = document.getElementById('modules');
+  const modules = data.modules || [];
+  box.replaceChildren();
+  if (!modules.length) {
+    box.className = 'hint';
+    box.textContent = 'No report yet';
+    return;
+  }
+  box.className = '';
+  modules.forEach((item) => {
+    const row = document.createElement('div');
+    row.append(item.name + ' ');
+    const mark = document.createElement('span');
+    mark.className = item.ok ? 'status-ok' : 'status-bad';
+    mark.textContent = item.ok ? 'ok' : 'failed';
+    row.append(mark);
+    box.append(row);
+  });
+}
 setInterval(async () => {
   const data = await (await fetch('/api/status')).json();
   markMode(data.mode);
+  showRobot(data);
   const field = document.getElementById('ip');
   if (data.robot_ip && document.activeElement !== field && field.value !== data.robot_ip) {
     field.value = data.robot_ip;

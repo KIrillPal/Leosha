@@ -6,6 +6,7 @@ import argparse
 import json
 import math
 import threading
+import time
 
 import rclpy
 from geometry_msgs.msg import TransformStamped
@@ -72,6 +73,7 @@ class RobotBridge(Node):
         self._latency_ms = 0.0
         self._client_fps = {"loop": 0.0, "camera": 0.0, "lidar": 0.0, "telemetry": 0.0}
         self._modules: dict[str, bool] = {}
+        self._last_reply_at: float | None = None
         self._scan_pub = self.create_publisher(LaserScan, "/scan", 10)
         self._image_pub = self.create_publisher(CompressedImage, "/camera/image/compressed", 10)
         self._joint_pub = self.create_publisher(JointState, "/joint_states", 10)
@@ -151,6 +153,7 @@ class RobotBridge(Node):
         self._publish_robot_ip()
         if packet is None:
             return
+        self._last_reply_at = time.monotonic()
         ros_now = self.get_clock().now().nanoseconds
         self._time_sync.observe(packet.client_time_ns, ros_now)
         self._sense.tick()
@@ -254,10 +257,12 @@ class RobotBridge(Node):
         )
         self._stats_pub.publish(message)
         status = String()
+        age = None if self._last_reply_at is None else time.monotonic() - self._last_reply_at
         status.data = json.dumps(
             {
                 "robot_ip": self._link.robot_ip,
                 "connected": self._last_scan_id is not None or self._last_frame_id is not None,
+                "reply_age_sec": None if age is None else round(age, 3),
                 "modules": self._modules,
             }
         )

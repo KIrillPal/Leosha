@@ -85,6 +85,24 @@ def shutdown_line(*, now: datetime | None = None) -> str:
     return _line("shutdown", now)
 
 
+def initializing_line(*, now: datetime | None = None) -> str:
+    """Return the plain line printed when the server package starts."""
+    return _line("Initializing ROS2 package", now)
+
+
+def http_url(host: str, port: int) -> str:
+    """Return a browser URL. A wildcard bind is shown as localhost."""
+    shown = (host or "").strip()
+    if shown in {"", "0.0.0.0", "::"}:
+        shown = "127.0.0.1"
+    return f"http://{shown}:{int(port)}"
+
+
+def server_ready_line(url: str, *, now: datetime | None = None) -> str:
+    """Return the green line printed when the web server is listening."""
+    return _line(f"{GREEN}Server is ready on {BRIGHT_GREEN}{url}{RESET}", now)
+
+
 def failure_line(text: str, *, now: datetime | None = None) -> str:
     """Return a red line for a failure that is not a traceback."""
     return _line(f"{RED}{text}{RESET}", now)
