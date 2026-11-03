@@ -73,6 +73,8 @@ class RobotBridge(Node):
         self._status_pub = self.create_publisher(String, "/robot/status", 10)
         self._truth_pub = self.create_publisher(String, "/sim/ground_truth", 10)
         self._stats_pub = self.create_publisher(String, "/leo/system_stats", 10)
+        self._ip_pub = self.create_publisher(String, "/leo/robot_ip", 10)
+        self._published_ip = ports["robot_ip"]
         self._tf = TransformBroadcaster(self)
         self.create_subscription(drive_type(), "/cmd/drive", self._on_drive, 10)
         self.create_subscription(JointState, "/cmd/head", self._on_head, 10)
@@ -85,9 +87,13 @@ class RobotBridge(Node):
         self.get_logger().info("robot bridge listening")
 
     def _on_hello(self, hello, server_time_ns: int) -> bytes:
+        self._adopt_peer()
         sim = self._config.sim_payload(hello.world or "room") if hello.sim else None
         self._time_sync.observe(hello.client_time_ns, self.get_clock().now().nanoseconds)
         return reply_bytes(server_time_ns, hello, self._config.client_payload(), sim, self._config.network)
+
+    def _adopt_peer(self) -> None:
+        self._link.set_robot_ip(self._link.last_peer)
 
     def _on_drive(self, message) -> None:
         self._speed, self._steer = read_drive(message)
@@ -120,10 +126,13 @@ class RobotBridge(Node):
 
     def _repeat_command(self) -> None:
         self._send_command()
+        self._publish_robot_ip()
         self._heartbeat.tick()
 
     def _poll(self) -> None:
         packet = self._link.poll()
+        self._adopt_peer()
+        self._publish_robot_ip()
         if packet is None:
             return
         ros_now = self.get_clock().now().nanoseconds
@@ -227,8 +236,24 @@ class RobotBridge(Node):
         )
         self._stats_pub.publish(message)
         status = String()
-        status.data = json.dumps({"robot_ip": self._config.network["robot_ip"], "connected": self._last_scan_id is not None or self._last_frame_id is not None})
+        status.data = json.dumps(
+            {
+                "robot_ip": self._link.robot_ip,
+                "connected": self._last_scan_id is not None or self._last_frame_id is not None,
+            }
+        )
         self._status_pub.publish(status)
+        self._publish_robot_ip()
+
+    def _publish_robot_ip(self) -> None:
+        ip = self._link.robot_ip
+        if not ip or ip == self._published_ip:
+            return
+        self._published_ip = ip
+        message = String()
+        message.data = ip
+        self._ip_pub.publish(message)
+        self.get_logger().info(f"robot ip {ip}")
 
     def destroy_node(self):
         if self._duckdns is not None:

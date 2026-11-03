@@ -40,6 +40,17 @@ class _Body:
         self.stop.set()
         self._thread.join(timeout=1.0)
 
+    def wait_until_stopped(self) -> None:
+        """Let the current motor pulse show up in the pose before shutdown."""
+        if not self._thread.is_alive():
+            return
+        deadline = time.monotonic() + 1.0
+        while time.monotonic() < deadline:
+            with self.lock:
+                if abs(self.speed) <= 1e-6:
+                    return
+            time.sleep(0.005)
+
     def _run(self) -> None:
         hz = float(self.cfg["physics_hz"])
         dt = 1.0 / hz
@@ -96,7 +107,18 @@ class SimServos:
         return self._body.pose()
 
     def close(self) -> None:
-        return None
+        from leo_client.hardware.servos import ramp_outputs
+
+        start = (self.motor_throttle, self.steering_throttle, self.pan_servo_deg, self.tilt_servo_deg)
+        calibration = self._body.calibration
+        target = (
+            throttle_from_speed(0.0, calibration),
+            0.0,
+            float(calibration["head_pan_zero_deg"]),
+            float(calibration["head_tilt_zero_deg"]),
+        )
+        ramp_outputs(self.apply, start, target)
+        self._body.wait_until_stopped()
 
 
 class SimLidar:

@@ -3,8 +3,14 @@
 from __future__ import annotations
 
 import logging
+import math
+import time
 
 LOGGER = logging.getLogger("leo.client.servos")
+
+# Every actuator returns to its standard output on one shared sine ramp.
+PARK_SEC = 2.0
+PARK_HZ = 50.0
 
 
 class Servos:
@@ -57,7 +63,58 @@ class Servos:
     def close(self) -> None:
         if self._kit is None:
             return
+        start = (self.motor_throttle, self.steering_throttle, self.pan_servo_deg, self.tilt_servo_deg)
         try:
-            self.apply(self._neutral_throttle(), 0.0, self.pan_servo_deg, self.tilt_servo_deg)
+            ramp_outputs(self.apply, start, self.standard_pose())
         except Exception:
             LOGGER.exception("failed to park servos")
+
+    def standard_pose(self) -> tuple[float, float, float, float]:
+        return (
+            self._neutral_throttle(),
+            0.0,
+            float(self._calibration["head_pan_zero_deg"]),
+            float(self._calibration["head_tilt_zero_deg"]),
+        )
+
+
+def sine_ramp(fraction: float) -> float:
+    """Move fraction for a sine acceleration that starts and ends at rest.
+
+    Acceleration over the whole park is one period of a sine wave.
+    """
+    fraction = min(1.0, max(0.0, fraction))
+    return fraction - math.sin(2.0 * math.pi * fraction) / (2.0 * math.pi)
+
+
+def ramp_outputs(
+    apply,
+    start: tuple[float, ...],
+    target: tuple[float, ...],
+    sleep=time.sleep,
+    clock=time.monotonic,
+) -> None:
+    """Bring every output to its target together, in ``PARK_SEC`` seconds."""
+    if all(abs(left - right) <= 1e-6 for left, right in zip(start, target)):
+        apply(*target)
+        return
+    steps = max(1, int(round(PARK_SEC * PARK_HZ)))
+    origin = clock()
+    for step in range(1, steps + 1):
+        mix = sine_ramp(step / steps)
+        blended = tuple(left + (right - left) * mix for left, right in zip(start, target))
+        apply(*blended)
+        _sleep_until(origin + PARK_SEC * step / steps, sleep, clock)
+    apply(*target)
+
+
+def _sleep_until(deadline: float, sleep, clock) -> None:
+    """A stop signal does not end the park early."""
+    while True:
+        remaining = deadline - clock()
+        if remaining <= 0.0:
+            return
+        try:
+            sleep(remaining)
+        except KeyboardInterrupt:
+            continue

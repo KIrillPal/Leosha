@@ -5,9 +5,24 @@ from pathlib import Path
 from leo_client.link import ClientLink
 from leo_protocol.protocol import Command, Hello
 from leo_server.common.config import load_config
-from leo_server.nodes.robot_bridge.link import ServerLink, reply_bytes
+from leo_server.nodes.robot_bridge.link import ServerLink, peer_ipv4, reply_bytes
 
 CFG = load_config(Path(__file__).resolve().parents[3] / "config" / "robot.yaml")
+
+
+def test_peer_address_keeps_the_ipv4_host():
+    class _Frame:
+        def get(self, key):
+            assert key == "Peer-Address"
+            return "tcp://192.168.31.71:40000"
+
+    assert peer_ipv4(_Frame()) == "192.168.31.71"
+    assert peer_ipv4(_FrameEmpty()) == ""
+
+
+class _FrameEmpty:
+    def get(self, key):
+        return None
 
 
 def test_session_handshake_delivers_config_and_a_command():
@@ -17,7 +32,7 @@ def test_session_handshake_delivers_config_and_a_command():
         network["telemetry_port"],
         network["handshake_port"],
         network["command_port"],
-        "127.0.0.1",
+        "10.1.1.1",
     )
 
     def handler(hello, server_time_ns):
@@ -31,6 +46,9 @@ def test_session_handshake_delivers_config_and_a_command():
         reply = client.handshake(Hello(time.monotonic_ns(), True, "room"))
         assert reply["client"]["calibration"]["steering_invert"] is True
         assert reply["sim"]["world"]["start_x"] == CFG.sim["worlds"]["room"]["start_x"]
+        assert server.last_peer == "127.0.0.1"
+        server.set_robot_ip(server.last_peer)
+        assert server.robot_ip == "127.0.0.1"
         client.open_streams(network["telemetry_port"], network["command_port"])
         time.sleep(0.2)
         found = None

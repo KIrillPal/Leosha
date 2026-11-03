@@ -1,4 +1,9 @@
-"""One session: handshake, then apply commands and publish sensors. No mode lives here."""
+"""One session: find the server, then apply commands and publish sensors.
+
+A silence longer than a second is ``waiting``. After thirty seconds of waiting
+the session ends so the caller can search for the server again. Every exit
+returns each actuator to its standard position on a two-second sine ramp.
+"""
 
 from __future__ import annotations
 
@@ -23,6 +28,41 @@ from leo_client.watchdog import Watchdog
 from leo_protocol.protocol import Command, Hello, Telemetry
 
 LOGGER = logging.getLogger("leo.client")
+
+LOST_AFTER_SEC = 1.0
+WAIT_LIMIT_SEC = 30.0
+_CONNECTED = "connected"
+_WAITING = "waiting"
+
+
+class LinkPhase:
+    """Connected, then waiting, then a request to search again."""
+
+    def __init__(self, clock=time.monotonic) -> None:
+        self.phase = _CONNECTED
+        self._clock = clock
+        self._last_heard = clock()
+        self._waiting_since = 0.0
+
+    def heard(self) -> str | None:
+        now = self._clock()
+        self._last_heard = now
+        if self.phase != _WAITING:
+            return None
+        self.phase = _CONNECTED
+        self._waiting_since = 0.0
+        return "restored"
+
+    def poll(self) -> str | None:
+        now = self._clock()
+        if self.phase == _CONNECTED and now - self._last_heard >= LOST_AFTER_SEC:
+            self.phase = _WAITING
+            self._waiting_since = now
+            return "lost"
+        if self.phase == _WAITING and now - self._waiting_since >= WAIT_LIMIT_SEC:
+            self.phase = "searching"
+            return "search"
+        return None
 
 
 class _Route:
@@ -75,17 +115,21 @@ class Session:
         self._lidar_rate = Rate()
         self._telemetry_rate = Rate()
         self._lock = threading.Lock()
+        self._phase = LinkPhase()
+        self._search = False
 
-    def run(self, duration_sec: float = 0.0) -> None:
-        self._camera.start()
-        self._lidar.start()
-        self._servos.start()
-        command_thread = threading.Thread(target=self._command_loop, name="commands", daemon=True)
-        telemetry_thread = threading.Thread(target=self._telemetry_loop, name="telemetry", daemon=True)
-        command_thread.start()
-        telemetry_thread.start()
+    def run(self, duration_sec: float = 0.0) -> str:
+        command_thread = None
+        telemetry_thread = None
         deadline = time.monotonic() + duration_sec if duration_sec > 0.0 else None
         try:
+            self._camera.start()
+            self._lidar.start()
+            self._servos.start()
+            command_thread = threading.Thread(target=self._command_loop, name="commands", daemon=True)
+            telemetry_thread = threading.Thread(target=self._telemetry_loop, name="telemetry", daemon=True)
+            command_thread.start()
+            telemetry_thread.start()
             while not self._stop.is_set():
                 if deadline is not None and time.monotonic() >= deadline:
                     break
@@ -94,11 +138,14 @@ class Session:
                 time.sleep(0.05)
         finally:
             self._stop.set()
-            command_thread.join(timeout=1.0)
-            telemetry_thread.join(timeout=1.0)
+            if command_thread is not None:
+                command_thread.join(timeout=1.0)
+            if telemetry_thread is not None:
+                telemetry_thread.join(timeout=1.0)
             self._servos.close()
             self._camera.close()
             self._lidar.close()
+        return "search" if self._search else "done"
 
     def _command_loop(self) -> None:
         period = 1.0 / float(self._cfg["command_hz"])
@@ -106,9 +153,24 @@ class Session:
         while not self._stop.is_set():
             started = time.monotonic()
             command = self._link.poll_command()
+            self._watch_link(command)
             self._apply(command, period, neutral)
             self._loop_rate.tick()
             time.sleep(max(0.0, period - (time.monotonic() - started)))
+
+    def _watch_link(self, command: Command | None) -> None:
+        if command is not None:
+            if self._phase.heard() == "restored":
+                LOGGER.info("server link restored")
+            return
+        event = self._phase.poll()
+        if event == "lost":
+            LOGGER.warning("server link lost; waiting")
+            return
+        if event == "search":
+            LOGGER.warning("waiting expired; searching")
+            self._search = True
+            self._stop.set()
 
     def _apply(self, command: Command | None, dt: float, neutral: float) -> None:
         if command is not None:
@@ -229,22 +291,32 @@ def open_link(server: str, sim_world: str, addresses: str | None = None, timeout
 
 
 def open_session(server: str, sim_world: str, show: bool, route: bool, duration_sec: float, addresses: str | None = None) -> None:
-    link, reply = open_link(server, sim_world, addresses)
-    try:
-        client_cfg = reply["client"]
-        network_ports = reply["ports"]
-        link.open_streams(int(network_ports["telemetry_port"]), int(network_ports["command_port"]))
-        camera, lidar, servos, body = _devices(sim_world, reply.get("sim"), client_cfg, show)
-        played = _Route(reply["sim"]["route"]) if route and reply.get("sim") else None
-        if body is not None:
-            body.start()
+    while True:
+        LOGGER.info("searching")
         try:
-            Session(link, client_cfg, camera, lidar, servos, played).run(duration_sec)
-        finally:
+            link, reply = open_link(server, sim_world, addresses)
+        except Exception as exc:
+            LOGGER.warning("search failed (%s); retry in %.0fs", exc, WAIT_LIMIT_SEC)
+            time.sleep(WAIT_LIMIT_SEC)
+            continue
+        reason = "done"
+        try:
+            client_cfg = reply["client"]
+            network_ports = reply["ports"]
+            link.open_streams(int(network_ports["telemetry_port"]), int(network_ports["command_port"]))
+            camera, lidar, servos, body = _devices(sim_world, reply.get("sim"), client_cfg, show)
+            played = _Route(reply["sim"]["route"]) if route and reply.get("sim") else None
             if body is not None:
-                body.close()
-    finally:
-        link.close()
+                body.start()
+            try:
+                reason = Session(link, client_cfg, camera, lidar, servos, played).run(duration_sec)
+            finally:
+                if body is not None:
+                    body.close()
+        finally:
+            link.close()
+        if reason != "search":
+            return
 
 
 def _devices(sim_world: str, sim_cfg: dict | None, client_cfg: dict, show: bool):

@@ -52,6 +52,14 @@ def test_monitor_page_matches_the_site_and_the_architecture_layout():
         assert name in html
 
 
+def test_status_reports_the_robot_ip_held_in_memory():
+    state = UiState(["pause"], "10.0.0.1")
+    client = create_app(state, lambda *_args: None).test_client()
+    assert client.get("/api/status").get_json()["robot_ip"] == "10.0.0.1"
+    state.robot_ip = "192.168.31.71"
+    assert client.get("/api/status").get_json()["robot_ip"] == "192.168.31.71"
+
+
 def test_web_pages_only_publish():
     sent = []
     state = UiState(["pause", "teleoperation"], "127.0.0.1")

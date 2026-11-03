@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import signal
 import sys
 from pathlib import Path
 
@@ -33,9 +34,15 @@ def main() -> None:
     parser.add_argument("--duration", type=float, default=0.0, help="stop after this many seconds")
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
+    signal.signal(signal.SIGTERM, _end_session)
     from leo_client.session import open_session
 
     open_session(args.server, args.sim, args.show, args.route, args.duration, args.addresses or None)
+
+
+def _end_session(signum: int, _frame: object) -> None:
+    logging.getLogger("leo.client").info("signal %s, ending session", signum)
+    raise KeyboardInterrupt
 
 
 if __name__ == "__main__":

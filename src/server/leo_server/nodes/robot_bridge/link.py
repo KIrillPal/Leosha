@@ -7,6 +7,7 @@ import time
 
 import zmq
 
+from leo_protocol.duckdns import is_ipv4
 from leo_protocol.protocol import Telemetry, pack_command, pack_error, pack_reply, unpack_hello, unpack_telemetry
 
 
@@ -28,6 +29,7 @@ class ServerLink:
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
         self._next_ip: str | None = None
+        self.last_peer = ""
 
     def start(self, handler) -> None:
         self._thread = threading.Thread(target=self._handshake_loop, args=(handler,), name="handshake", daemon=True)
@@ -40,18 +42,33 @@ class ServerLink:
         socket.bind(self._handshake_addr)
         while not self._stop.is_set():
             try:
-                payload = socket.recv()
+                frame = socket.recv(copy=False)
             except zmq.Again:
                 continue
+            self._remember_peer(frame)
             try:
-                hello = unpack_hello(payload)
+                hello = unpack_hello(frame.bytes)
                 socket.send(handler(hello, time.time_ns()))
             except Exception as exc:
                 socket.send(pack_error(str(exc)))
         socket.close(linger=0)
 
+    @property
+    def robot_ip(self) -> str:
+        if self._next_ip:
+            return self._next_ip
+        return self._robot_ip
+
     def set_robot_ip(self, robot_ip: str) -> None:
+        robot_ip = robot_ip.strip()
+        if not robot_ip or robot_ip == self.robot_ip:
+            return
         self._next_ip = robot_ip
+
+    def _remember_peer(self, frame) -> None:
+        ip = peer_ipv4(frame)
+        if ip:
+            self.last_peer = ip
 
     def _apply_ip(self) -> None:
         robot_ip = self._next_ip
@@ -69,10 +86,11 @@ class ServerLink:
 
     def poll(self) -> Telemetry | None:
         try:
-            header, jpeg = self._telemetry.recv_multipart(flags=zmq.NOBLOCK)
+            frames = self._telemetry.recv_multipart(flags=zmq.NOBLOCK, copy=False)
         except zmq.Again:
             return None
-        return unpack_telemetry(header, jpeg)
+        self._remember_peer(frames[0])
+        return unpack_telemetry(frames[0].bytes, frames[1].bytes)
 
     def close(self) -> None:
         self._stop.set()
@@ -81,6 +99,21 @@ class ServerLink:
         self._telemetry.close(linger=0)
         self._commands.close(linger=0)
         self._ctx.term()
+
+
+def peer_ipv4(frame) -> str:
+    """Return the IPv4 of the peer that sent this frame."""
+    try:
+        raw = frame.get("Peer-Address")
+    except Exception:
+        return ""
+    if not raw:
+        return ""
+    text = raw.decode("utf-8", errors="replace") if isinstance(raw, (bytes, bytearray)) else str(raw)
+    host = text.split("://", 1)[-1].rsplit(":", 1)[0].strip("[]")
+    if is_ipv4(host):
+        return host
+    return ""
 
 
 def reply_bytes(server_time_ns: int, hello, client_cfg: dict, sim_cfg: dict | None, ports: dict) -> bytes:

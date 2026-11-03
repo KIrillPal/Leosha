@@ -14,7 +14,7 @@
     <label for="ip">Robot address</label>
     <input id="ip" type="text" placeholder="192.168.1.50" value="{{ robot_ip|default('', true) }}">
     <div style="margin-top:10px;"><button type="button" onclick="setIp()">Use this address</button></div>
-    <p class="hint" id="ipStatus">The override stays in memory for this session.</p>
+    <p class="hint" id="ipStatus">Taken from the client connection. The latest address is kept for this session.</p>
   </div>
 </div>
 <script>

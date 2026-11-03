@@ -33,6 +33,7 @@ class WebUi(Node):
         self._set_param_type = SetParameters
         self._mode_client = self.create_client(SetParameters, "/mode_manager/set_parameters")
         self.create_subscription(String, "/leo/mode", self._on_mode, 10)
+        self.create_subscription(String, "/leo/robot_ip", self._on_robot_ip, 10)
         self.create_subscription(String, "/leo/ui", self._on_ui, 10)
         self.create_subscription(String, "/leo/system_stats", self._on_stats, 10)
         self.create_subscription(CompressedImage, "/camera/image/compressed", self._on_image, 10)
@@ -66,6 +67,13 @@ class WebUi(Node):
             self._ip_pub.publish(message)
             with self._state.lock:
                 self._state.robot_ip = str(payload)
+
+    def _on_robot_ip(self, message: String) -> None:
+        ip = message.data.strip()
+        if not ip:
+            return
+        with self._state.lock:
+            self._state.robot_ip = ip
 
     def _on_mode(self, message: String) -> None:
         with self._state.lock:
