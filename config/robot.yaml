@@ -21,6 +21,8 @@ duckdns:
 client:
   command_hz: 100.0
   telemetry_hz: 30.0
+  waiting_timeout_sec: 1.5
+  wait_limit_sec: 30.0
   watchdog:
     timeout_ms: 100.0
     critical_ms: 500.0

@@ -18,6 +18,8 @@ def test_robot_yaml_loads():
     assert cfg.duckdns["enabled"] is True
     assert cfg.duckdns["update_sec"] == 300.0
     assert cfg.duckdns["global_ip"] == ""
+    assert cfg.client["waiting_timeout_sec"] == 1.0
+    assert cfg.client["wait_limit_sec"] == 30.0
 
 
 def test_missing_file_fails(tmp_path):

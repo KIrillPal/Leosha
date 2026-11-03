@@ -174,10 +174,19 @@ def _imu(value, path: str) -> dict:
     return _section(_mapping(value, path), {"enabled": _BOOL}, path)
 
 
+def _positive(value, path: str) -> float:
+    number = _as_float(value, path)
+    if number <= 0:
+        raise ConfigError(f"{path} must be positive")
+    return number
+
+
 def _client(value, path: str) -> dict:
     spec = {
         "command_hz": _FLOAT,
         "telemetry_hz": _FLOAT,
+        "waiting_timeout_sec": _positive,
+        "wait_limit_sec": _positive,
         "watchdog": _watchdog,
         "calibration": _calibration,
         "servos": _servos,
