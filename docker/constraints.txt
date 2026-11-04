@@ -1,0 +1,5 @@
+numpy>=1.21,<1.25
+setuptools>=30.3,<80
+opencv-python>=4.5,<4.11
+opencv-python-headless>=4.5,<4.11
+pytest>=7.0,<8

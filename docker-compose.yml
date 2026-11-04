@@ -1,0 +1,46 @@
+# LEO server plus sshd. The container stays up while sshd is supervised.
+# Data is an external volume and must exist before the first start:
+#   docker volume create leo-data
+# The container uses the host network so the server advertises this machine's
+# LAN address (DuckDNS TXT / robot handshake). sshd listens on SSH_PORT (2222).
+
+name: leo
+
+services:
+  server:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    image: leo-server:22.04
+    container_name: leo-server
+    hostname: leo-server
+    restart: unless-stopped
+    network_mode: host
+    stop_grace_period: 20s
+    working_dir: /opt/leo
+    environment:
+      LEO_CONFIG: /opt/leo/config/robot.yaml
+      LEO_SIM: ${LEO_SIM:-}
+      LEO_AUTOSTART: ${LEO_AUTOSTART:-1}
+      ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-0}
+      SSH_PORT: ${SSH_PORT:-2222}
+      LANG: en_US.UTF-8
+      LC_ALL: en_US.UTF-8
+    volumes:
+      - /home/kondrashov_k/Leosha:/opt/leo
+      - leo-config:/opt/leo/config
+      - leo-logs:/opt/leo/logs
+      - leo-data:/opt/leo/data
+      - /home/kondrashov_k/.ssh:/mnt/host-ssh:ro
+      - /home/kondrashov_k/.p10k.zsh:/home/leo/.p10k.zsh:ro
+    stdin_open: true
+    tty: true
+
+volumes:
+  leo-config:
+    name: leo-config
+  leo-logs:
+    name: leo-logs
+  leo-data:
+    external: true
+    name: leo-data

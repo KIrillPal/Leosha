@@ -1,0 +1,44 @@
+# Container shell: Oh My Zsh with the same theme and plugins as the host,
+# plus Powerlevel10k from ~/.p10k.zsh.
+if [[ -r "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh" ]]; then
+  source "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh"
+fi
+
+export ZSH="$HOME/.oh-my-zsh"
+ZSH_THEME="powerlevel10k/powerlevel10k"
+zstyle ':omz:update' mode disabled
+
+plugins=(
+    git
+    brew
+    F-Sy-H
+    zsh-autosuggestions
+    pip
+    command-not-found
+    sudo
+    zsh-history-substring-search
+    virtualenv
+    z
+    dotenv
+    history
+    jump
+    poetry
+)
+
+source "$ZSH/oh-my-zsh.sh"
+
+[[ ! -f ~/.p10k.zsh ]] || source ~/.p10k.zsh
+
+export LANG=en_US.UTF-8
+export LC_ALL=en_US.UTF-8
+export PATH="$HOME/.local/bin:$PATH"
+
+if [[ -f /opt/ros/humble/setup.zsh ]]; then
+  source /opt/ros/humble/setup.zsh
+fi
+if [[ -f /opt/leo/src/server/install/setup.zsh ]]; then
+  source /opt/leo/src/server/install/setup.zsh
+fi
+
+export LEO_CONFIG="${LEO_CONFIG:-/opt/leo/config/robot.yaml}"
+export ROS_LOG_DIR="${ROS_LOG_DIR:-/opt/leo/logs/ros}"
