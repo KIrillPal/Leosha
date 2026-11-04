@@ -74,7 +74,7 @@ class RobotBridge(Node):
         self._client_fps = {"loop": 0.0, "camera": 0.0, "lidar": 0.0, "telemetry": 0.0}
         self._modules: dict[str, bool] = {}
         self._last_reply_at: float | None = None
-        self._silence_sec = float(config.client["waiting_timeout_sec"])
+        self._reply_timeout_sec = float(config.web_ui["reply_timeout_sec"])
         self._scan_pub = self.create_publisher(LaserScan, "/scan", 10)
         self._image_pub = self.create_publisher(CompressedImage, "/camera/image/compressed", 10)
         self._joint_pub = self.create_publisher(JointState, "/joint_states", 10)
@@ -102,11 +102,7 @@ class RobotBridge(Node):
     def _on_hello(self, hello, server_time_ns: int) -> bytes:
         self._adopt(getattr(hello, "local_ip", ""))
         self._publish_robot_ip()
-        ip = self._link.robot_ip or self._link.last_peer
-        if ip:
-            self._connected_ip = ip
-            self._last_reply_at = time.monotonic()
-            console.write(console.robot_connected_line(ip))
+        self._hear(self._link.robot_ip or self._link.last_peer)
         sim = self._config.sim_payload(hello.world or "room") if hello.sim else None
         self._time_sync.observe(hello.client_time_ns, self.get_clock().now().nanoseconds)
         return reply_bytes(server_time_ns, hello, self._config.client_payload(), sim, self._config.network)
@@ -158,7 +154,7 @@ class RobotBridge(Node):
         if packet is None:
             self._note_silence()
             return
-        self._last_reply_at = time.monotonic()
+        self._hear(self._link.robot_ip or self._link.last_peer)
         ros_now = self.get_clock().now().nanoseconds
         self._time_sync.observe(packet.client_time_ns, ros_now)
         self._sense.tick()
@@ -180,12 +176,20 @@ class RobotBridge(Node):
             message.data = json.dumps({"x": packet.ground_truth[0], "y": packet.ground_truth[1], "yaw": packet.ground_truth[2]})
             self._truth_pub.publish(message)
 
+    def _hear(self, ip: str) -> None:
+        """Mark a reply. A robot that returns after silence is announced again."""
+        self._last_reply_at = time.monotonic()
+        if ip and ip != self._connected_ip:
+            self._connected_ip = ip
+            console.write(console.robot_connected_line(ip))
+
     def _note_silence(self) -> None:
+        """Match the settings page: quiet longer than the reply timeout is not a reply."""
         ip = self._connected_ip
         heard = self._last_reply_at
         if not ip or heard is None:
             return
-        if time.monotonic() - heard < self._silence_sec:
+        if time.monotonic() - heard <= self._reply_timeout_sec:
             return
         self._connected_ip = ""
         console.write(console.robot_disconnected_line(ip))
