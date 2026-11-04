@@ -23,11 +23,21 @@ def robot_status(reply_age_sec: float | None, reply_timeout_sec: float) -> str:
 def lidar_payload(scan) -> dict:
     """Scan JSON. Empty bins are null because NaN is not valid JSON."""
     if not scan:
-        return {"ranges": [], "angle_min": 0, "angle_increment": 0}
+        return {
+            "ranges": [],
+            "intensities": [],
+            "angle_min": 0,
+            "angle_increment": 0,
+            "range_min": 0,
+            "range_max": 0,
+        }
     return {
         "ranges": [_json_range(value) for value in scan["ranges"]],
+        "intensities": [_json_range(value) for value in scan.get("intensities") or []],
         "angle_min": float(scan["angle_min"]),
         "angle_increment": float(scan["angle_increment"]),
+        "range_min": float(scan.get("range_min") or 0),
+        "range_max": float(scan.get("range_max") or 0),
     }
 
 

@@ -115,11 +115,16 @@ class WebUi(Node):
 
     def _on_scan(self, message: LaserScan) -> None:
         step = max(1, len(message.ranges) // 360)
+        intensities = list(message.intensities)
+        sampled = intensities[::step] if len(intensities) == len(message.ranges) else []
         with self._state.lock:
             self._state.scan = {
                 "angle_min": float(message.angle_min),
                 "angle_increment": float(message.angle_increment) * step,
-                "ranges": [float(v) for v in message.ranges[::step]],
+                "range_min": float(message.range_min),
+                "range_max": float(message.range_max),
+                "ranges": [float(value) for value in message.ranges[::step]],
+                "intensities": [float(value) for value in sampled],
             }
 
     def _on_map(self, message: OccupancyGrid) -> None:

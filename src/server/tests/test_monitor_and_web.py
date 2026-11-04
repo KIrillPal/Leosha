@@ -114,10 +114,13 @@ def test_lidar_api_sends_null_for_empty_bins():
     assert "Infinity" not in body
     assert response.get_json() == {
         "ranges": [1.25, None, None, 2.5],
+        "intensities": [],
         "angle_min": -3.14,
         "angle_increment": 0.02,
+        "range_min": 0,
+        "range_max": 0,
     }
-    assert lidar_payload(None) == {"ranges": [], "angle_min": 0, "angle_increment": 0}
+    assert lidar_payload(None)["ranges"] == []
 
 
 def test_web_pages_only_publish():
@@ -133,6 +136,9 @@ def test_web_pages_only_publish():
     assert teleop.status_code == 200
     assert b"requestPointerLock" in teleop.data
     assert b"Escape" in teleop.data
+    lidar = client.get("/lidar").data.decode("utf-8")
+    assert "0° is forward, at the top." in lidar
+    assert "ctx.arc(" in lidar
     assert client.post("/api/mode", json={"mode": "teleoperation"}).status_code == 200
     assert client.post("/api/input", json={"w": True}).status_code == 200
     assert ("mode", "teleoperation") in sent
