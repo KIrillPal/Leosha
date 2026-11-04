@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 import time
 
 from flask import Flask, Response, jsonify, render_template, request
@@ -17,6 +18,24 @@ def robot_status(reply_age_sec: float | None, reply_timeout_sec: float) -> str:
     if reply_age_sec > reply_timeout_sec:
         return "Not responding"
     return "Connected"
+
+
+def lidar_payload(scan) -> dict:
+    """Scan JSON. Empty bins are null because NaN is not valid JSON."""
+    if not scan:
+        return {"ranges": [], "angle_min": 0, "angle_increment": 0}
+    return {
+        "ranges": [_json_range(value) for value in scan["ranges"]],
+        "angle_min": float(scan["angle_min"]),
+        "angle_increment": float(scan["angle_increment"]),
+    }
+
+
+def _json_range(value) -> float | None:
+    number = float(value)
+    if math.isfinite(number):
+        return number
+    return None
 
 
 def ordered_modules(modules: dict) -> list[dict]:
@@ -88,9 +107,7 @@ def create_app(state, publish) -> Flask:
     def lidar_data():
         with state.lock:
             scan = state.scan
-        if scan is None:
-            return jsonify({"ranges": [], "angle_min": 0, "angle_increment": 0})
-        return jsonify({"ranges": scan["ranges"], "angle_min": scan["angle_min"], "angle_increment": scan["angle_increment"]})
+        return jsonify(lidar_payload(scan))
 
     @app.get("/api/map")
     def map_image():

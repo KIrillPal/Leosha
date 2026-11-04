@@ -3,7 +3,7 @@ from pathlib import Path
 
 from leo_server.nodes.monitor.app import create_monitor_app
 from leo_server.nodes.monitor.graph import Edge, build_view
-from leo_server.nodes.web_ui.app import UiState, create_app, robot_status
+from leo_server.nodes.web_ui.app import UiState, create_app, lidar_payload, robot_status
 
 
 def test_graph_marks_a_quiet_node_stale_and_keeps_client_fps_separate():
@@ -98,6 +98,26 @@ def test_status_reports_the_robot_ip_held_in_memory():
     assert client.get("/api/status").get_json()["robot_ip"] == "10.0.0.1"
     state.robot_ip = "192.168.31.71"
     assert client.get("/api/status").get_json()["robot_ip"] == "192.168.31.71"
+
+
+def test_lidar_api_sends_null_for_empty_bins():
+    state = UiState(["pause"], "10.0.0.1")
+    state.scan = {
+        "angle_min": -3.14,
+        "angle_increment": 0.02,
+        "ranges": [1.25, float("nan"), float("inf"), 2.5],
+    }
+    response = create_app(state, lambda *_args: None).test_client().get("/api/lidar")
+    body = response.get_data(as_text=True)
+    assert response.status_code == 200
+    assert "NaN" not in body
+    assert "Infinity" not in body
+    assert response.get_json() == {
+        "ranges": [1.25, None, None, 2.5],
+        "angle_min": -3.14,
+        "angle_increment": 0.02,
+    }
+    assert lidar_payload(None) == {"ranges": [], "angle_min": 0, "angle_increment": 0}
 
 
 def test_web_pages_only_publish():
