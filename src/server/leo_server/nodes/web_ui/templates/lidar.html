@@ -25,8 +25,11 @@ const ctx = canvas.getContext('2d');
 
 function resizeCanvas() {
   const rect = canvas.getBoundingClientRect();
-  canvas.width = Math.max(320, Math.floor(rect.width));
-  canvas.height = Math.max(320, Math.floor(rect.height));
+  const width = Math.max(320, Math.floor(rect.width));
+  const height = Math.max(320, Math.floor(rect.height));
+  if (canvas.width === width && canvas.height === height) return;
+  canvas.width = width;
+  canvas.height = height;
 }
 
 function dataToCanvas(dataAngleRad) {
@@ -111,14 +114,19 @@ function drawScan(scan) {
   }
 }
 
+let refreshBusy = false;
+
 async function refreshLidar() {
-  resizeCanvas();
+  if (refreshBusy) return;
+  refreshBusy = true;
   let scan;
   try {
     scan = await (await fetch('/api/lidar')).json();
   } catch (err) {
+    refreshBusy = false;
     return;
   }
+  resizeCanvas();
   const ranges = Array.isArray(scan.ranges) ? scan.ranges : [];
   const aMin = Number(scan.angle_min || 0);
   const aInc = Number(scan.angle_increment || 0);
@@ -131,6 +139,7 @@ async function refreshLidar() {
   document.getElementById('angleMin').textContent = minDeg.toFixed(1);
   document.getElementById('angleMax').textContent = maxDeg.toFixed(1);
   drawScan(scan);
+  refreshBusy = false;
 }
 
 window.addEventListener('resize', resizeCanvas);
