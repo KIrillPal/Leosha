@@ -243,7 +243,7 @@ slam_toolbox:
   occupancy_threshold: 0.1
 
 vision:
-  yolo_model: "/home/kir/Leosha/models/yolo11n-pose.pt"
+  yolo_model: "/opt/leo/models/yolo11n-pose.pt"
   yolo_device: "cpu"
   yolo_conf: 0.5
   yolo_imgsz: 320

@@ -2,7 +2,8 @@
 
 The A record is the public address DuckDNS sees, unless ``global_ip`` is set.
 That override is where a NetBird address goes later. The TXT record is the
-private address on the default route. The robot tries the TXT address first.
+address passed to ``leo-server --ip``, or the private address on the default
+route when that argument is omitted. The robot tries the TXT address first.
 """
 
 from __future__ import annotations
@@ -114,8 +115,8 @@ class DuckDns:
             )
             return None
         pinned = local_ip.strip()
-        if pinned and not is_private_ipv4(pinned):
-            log.error(f"duckdns local address {pinned} is not a private IPv4 address")
+        if pinned and not is_ipv4(pinned):
+            log.error(f"duckdns local address {pinned} is not an IPv4 address")
             return None
 
         def provider():
@@ -150,8 +151,8 @@ class DuckDns:
 
     def publish_once(self) -> Published:
         local_ip = self._local_ip() or ""
-        if local_ip and not is_private_ipv4(local_ip):
-            raise ValueError(f"local IPv4 is not a private address: {local_ip}")
+        if local_ip and not is_ipv4(local_ip):
+            raise ValueError(f"local IPv4 is not an IPv4 address: {local_ip}")
         fields = {"domains": self._subdomain, "token": self._token, "verbose": "true"}
         if self._global_ip:
             fields["ip"] = self._global_ip

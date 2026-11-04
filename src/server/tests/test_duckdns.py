@@ -99,6 +99,28 @@ def test_publish_sends_a_global_override_and_the_lan_address():
     assert "txt=192.168.1.40" in query
 
 
+def test_publish_sends_any_ipv4_from_the_ip_argument():
+    captured = {}
+
+    def opener(request, timeout):
+        captured["url"] = request.full_url
+        captured["timeout"] = timeout
+        return _Body(b"OK\n203.0.113.10\nUPDATED\n")
+
+    service = DuckDns(
+        "ipleo.duckdns.org",
+        "secret-token",
+        300,
+        _Log(),
+        opener,
+        local_ip=lambda: "100.98.148.137",
+    )
+    published = service.publish_once()
+    assert published.global_ip == "203.0.113.10"
+    assert published.local_ip == "100.98.148.137"
+    assert "txt=100.98.148.137" in captured["url"]
+
+
 def test_private_ranges_and_txt_parsing():
     assert is_private_ipv4("10.1.2.3")
     assert is_private_ipv4("172.16.0.1")
@@ -167,5 +189,5 @@ def test_disabled_or_incomplete_settings_do_not_publish(monkeypatch):
     assert any("global_ip" in line for line in override.errors)
     local = _Log()
     public = {"enabled": True, "domain": "leosha.duckdns.org", "token": "secret", "update_sec": 300}
-    assert DuckDns.start_from(public, local, "31.59.217.158") is None
+    assert DuckDns.start_from(public, local, "not-an-ip") is None
     assert any("local address" in line for line in local.errors)
