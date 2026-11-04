@@ -164,6 +164,34 @@ def test_rejected_update_and_a_redacted_error():
     assert "***" in service._safe(RuntimeError("secret-token in the url"))
 
 
+def test_publish_and_a_rejected_ip_are_printed(monkeypatch):
+    written = []
+    monkeypatch.setattr("leo_server.nodes.robot_bridge.duckdns.console.write", written.append)
+    holder = {}
+
+    def opener(request, timeout):
+        holder["service"]._stop.set()
+        return _Body(b"OK\n203.0.113.10\nUPDATED\n")
+
+    service = DuckDns(
+        "ipleo.duckdns.org",
+        "secret-token",
+        300,
+        _Log(),
+        opener,
+        local_ip=lambda: "100.98.148.137",
+    )
+    holder["service"] = service
+    service._loop()
+    assert any("203.0.113.10" in line and "100.98.148.137" in line and "were published to DuckDNS" in line for line in written)
+
+    written.clear()
+    monkeypatch.delenv("DUCKDNS_TOKEN", raising=False)
+    rejected = {"enabled": True, "domain": "leosha.duckdns.org", "token": "secret", "update_sec": 300}
+    assert DuckDns.start_from(rejected, _Log(), "not-an-ip") is None
+    assert any("--ip not-an-ip is not an IPv4 address" in line for line in written)
+
+
 def test_disabled_or_incomplete_settings_do_not_publish(monkeypatch):
     monkeypatch.delenv("DUCKDNS_TOKEN", raising=False)
     log = _Log()

@@ -57,6 +57,17 @@ def robot_connected_line(ip: str, *, now: datetime | None = None) -> str:
     return _line(body, now)
 
 
+def robot_disconnected_line(ip: str, *, now: datetime | None = None) -> str:
+    """Return the yellow line the server prints when that robot is dropped."""
+    body = f"{YELLOW}Robot {BRIGHT_YELLOW}{ip}{YELLOW} disconnected{RESET}"
+    return _line(body, now)
+
+
+def parking_line(*, now: datetime | None = None) -> str:
+    """Return the plain line the client prints while actuators return home."""
+    return _line("parking", now)
+
+
 def lost_line(seconds: float, *, now: datetime | None = None) -> str:
     """Return the yellow line whose stopwatch is how long the wait has lasted."""
     body = f"{YELLOW}Lost connection. Waiting {BRIGHT_YELLOW}{duration(seconds)}{RESET}"
@@ -114,6 +125,26 @@ def http_url(host: str, port: int) -> str:
 def server_ready_line(url: str, *, now: datetime | None = None) -> str:
     """Return the green line printed when the web server is listening."""
     return _line(f"{GREEN}Server is ready on {BRIGHT_GREEN}{url}{RESET}", now)
+
+
+def published_line(global_ip: str, local_ip: str, *, now: datetime | None = None) -> str:
+    """Return the green line printed after DuckDNS accepts the addresses."""
+    addresses = []
+    for ip in (global_ip, local_ip):
+        if ip and ip not in addresses:
+            addresses.append(ip)
+    if len(addresses) >= 2:
+        shown = f"{BRIGHT_GREEN}{addresses[0]}{GREEN} and {BRIGHT_GREEN}{addresses[1]}"
+        body = f"{GREEN}IPs {shown}{GREEN} were published to DuckDNS{RESET}"
+    else:
+        shown = f"{BRIGHT_GREEN}{addresses[0]}" if addresses else ""
+        body = f"{GREEN}IP {shown}{GREEN} was published to DuckDNS{RESET}"
+    return _line(body, now)
+
+
+def rejected_ip_line(ip: str, *, now: datetime | None = None) -> str:
+    """Return the red line printed when ``--ip`` is not an IPv4 address."""
+    return _line(f"{RED}--ip {ip} is not an IPv4 address{RESET}", now)
 
 
 def failure_line(text: str, *, now: datetime | None = None) -> str:

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import logging
 import os
+import sys
 import threading
 import time
 from datetime import datetime
@@ -240,11 +241,14 @@ class Session:
                     break
                 time.sleep(0.05)
         finally:
+            interrupted = sys.exc_info()[0] is KeyboardInterrupt
             self._stop.set()
             if command_thread is not None:
                 command_thread.join(timeout=1.0)
             if telemetry_thread is not None:
                 telemetry_thread.join(timeout=1.0)
+            if interrupted:
+                console.write(console.parking_line())
             self._servos.close()
             self._camera.close()
             self._lidar.close()

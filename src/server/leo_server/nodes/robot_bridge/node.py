@@ -85,6 +85,7 @@ class RobotBridge(Node):
         self._ip_lock = threading.Lock()
         self._ip_pub = self.create_publisher(String, "/leo/robot_ip", _LATCHED)
         self._published_ip = ""
+        self._connected_ip = ""
         self._tf = TransformBroadcaster(self)
         self.create_subscription(drive_type(), "/cmd/drive", self._on_drive, 10)
         self.create_subscription(JointState, "/cmd/head", self._on_head, 10)
@@ -102,6 +103,7 @@ class RobotBridge(Node):
         self._publish_robot_ip()
         ip = self._link.robot_ip or self._link.last_peer
         if ip:
+            self._connected_ip = ip
             console.write(console.robot_connected_line(ip))
         sim = self._config.sim_payload(hello.world or "room") if hello.sim else None
         self._time_sync.observe(hello.client_time_ns, self.get_clock().now().nanoseconds)
@@ -281,6 +283,9 @@ class RobotBridge(Node):
         self.get_logger().info(f"robot ip {ip}")
 
     def destroy_node(self):
+        if self._connected_ip:
+            console.write(console.robot_disconnected_line(self._connected_ip))
+            self._connected_ip = ""
         if self._duckdns is not None:
             self._duckdns.close()
         self._link.close()

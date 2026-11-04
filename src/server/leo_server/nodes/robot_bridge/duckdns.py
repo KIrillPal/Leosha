@@ -117,6 +117,7 @@ class DuckDns:
         pinned = local_ip.strip()
         if pinned and not is_ipv4(pinned):
             log.error(f"duckdns local address {pinned} is not an IPv4 address")
+            console.write(console.rejected_ip_line(pinned))
             return None
 
         def provider():
@@ -173,6 +174,7 @@ class DuckDns:
                 console.write(console.warning_line("duckdns update failed"))
             else:
                 self._log.info(self._published(published))
+                console.write(console.published_line(published.global_ip, published.local_ip))
             if self._stop.wait(self._update_sec):
                 return
 

@@ -1,3 +1,4 @@
+import threading
 from pathlib import Path
 
 from leo_client.calibration import pan_servo_deg, throttle_from_speed
@@ -92,6 +93,36 @@ def test_ending_the_session_parks_servos_before_the_sensors_stop():
 
     assert session.run(duration_sec=0.05) == "done"
     assert order == ["servos", "camera", "lidar"]
+
+
+def test_ctrl_c_says_parking_before_the_servos_stop(monkeypatch):
+    written = []
+    monkeypatch.setattr("leo_client.session.console.write", written.append)
+
+    def sleep(_seconds: float) -> None:
+        if threading.current_thread() is threading.main_thread():
+            raise KeyboardInterrupt
+
+    monkeypatch.setattr("leo_client.session.time.sleep", sleep)
+    order = []
+    announced = []
+    servos = _Servos()
+    servos.pan_servo_deg = CFG["calibration"]["head_pan_zero_deg"]
+    servos.tilt_servo_deg = CFG["calibration"]["head_tilt_zero_deg"]
+
+    def close() -> None:
+        announced.extend(written)
+        order.append("servos")
+
+    servos.start = lambda: None
+    servos.close = close
+    session = Session(_Link(), CFG, _Device("camera", order), _Device("lidar", order), servos, None)
+    try:
+        session.run()
+    except KeyboardInterrupt:
+        pass
+    assert order[0] == "servos"
+    assert any("parking" in line for line in announced)
 
 
 def test_actuators_stay_neutral_until_a_command_arrives():

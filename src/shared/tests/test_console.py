@@ -22,7 +22,11 @@ from leo_protocol.console import (
     remember_output,
     report_exception,
     rewrite,
+    parking_line,
     robot_connected_line,
+    robot_disconnected_line,
+    published_line,
+    rejected_ip_line,
     server_ready_line,
     short_name,
     shutdown_line,
@@ -55,6 +59,16 @@ def test_server_startup_lines():
     ready = server_ready_line(http_url("0.0.0.0", 8080), now=WHEN)
     assert f"{GREEN}Server is ready on {BRIGHT_GREEN}http://127.0.0.1:8080{RESET}" in ready
     assert http_url("192.168.1.10", 8080) == "http://192.168.1.10:8080"
+    published = published_line("203.0.113.10", "100.98.148.137", now=WHEN)
+    assert (
+        f"{GREEN}IPs {BRIGHT_GREEN}203.0.113.10{GREEN} and "
+        f"{BRIGHT_GREEN}100.98.148.137{GREEN} were published to DuckDNS{RESET}"
+    ) in published
+    same = published_line("100.98.148.137", "100.98.148.137", now=WHEN)
+    assert f"{GREEN}IP {BRIGHT_GREEN}100.98.148.137{GREEN} was published to DuckDNS{RESET}" in same
+    assert " and " not in same
+    rejected = rejected_ip_line("not-an-ip", now=WHEN)
+    assert f"{RED}--ip not-an-ip is not an IPv4 address{RESET}" in rejected
 
 
 def test_waiting_lines_highlight_the_duration():
@@ -91,6 +105,12 @@ def test_lost_line_rewrites_itself_with_a_carriage_return(monkeypatch):
 def test_robot_death_and_shutdown_use_one_style():
     arrived = robot_connected_line("10.0.0.8", now=WHEN)
     assert f"{GREEN}Robot is connected from {BRIGHT_GREEN}10.0.0.8{RESET}" in arrived
+    left = robot_disconnected_line("10.0.0.8", now=WHEN)
+    assert f"{YELLOW}Robot {BRIGHT_YELLOW}10.0.0.8{YELLOW} disconnected{RESET}" in left
+    parked = parking_line(now=WHEN)
+    assert parked.endswith(" parking")
+    assert RED not in parked
+    assert GREEN not in parked
     assert f"{RED}odometry{RESET} died" in died_line("odometry", now=WHEN)
     stopped = shutdown_line(now=WHEN)
     assert stopped.endswith(" shutdown")

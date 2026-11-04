@@ -34,10 +34,16 @@ def main() -> None:
     parser.add_argument("--duration", type=float, default=0.0, help="stop after this many seconds")
     args = parser.parse_args()
     _configure_logging()
+    signal.signal(signal.SIGINT, _end_session)
     signal.signal(signal.SIGTERM, _end_session)
     from leo_client.session import open_session
 
-    open_session(args.server, args.sim, args.show, args.route, args.duration, args.addresses or None)
+    try:
+        open_session(args.server, args.sim, args.show, args.route, args.duration, args.addresses or None)
+    except KeyboardInterrupt:
+        from leo_protocol.console import shutdown_line, write
+
+        write(shutdown_line())
 
 
 def _configure_logging() -> None:
@@ -51,9 +57,6 @@ def _configure_logging() -> None:
 
 def _end_session(signum: int, _frame: object) -> None:
     logging.getLogger("leo.client").info("signal %s, ending session", signum)
-    from leo_protocol.console import shutdown_line, write
-
-    write(shutdown_line())
     raise KeyboardInterrupt
 
 
