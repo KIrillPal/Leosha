@@ -266,7 +266,7 @@ web_ui:
   host: "0.0.0.0"
   port: 8080
   # Settings shows "Not responding" after this long with no telemetry.
-  reply_timeout_sec: 2.0
+  reply_timeout_sec: 5.0
 
 monitor:
   host: "0.0.0.0"
