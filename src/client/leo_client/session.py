@@ -15,7 +15,7 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-from leo_client.addresses import AddressBook, default_book_path, plan_targets
+from leo_client.addresses import AddressBook, default_book_path, known_local_first, plan_targets
 from leo_protocol import console
 from leo_protocol.duckdns import is_ipv4
 from leo_client.calibration import (
@@ -476,6 +476,8 @@ def open_link(
         attempts, host = plan_targets(server, book, resolve)
     if skip_ip:
         attempts = [item for item in attempts if item.ip != skip_ip]
+    if first_timeout_sec is not None:
+        attempts = known_local_first(attempts, book)
     LOGGER.info("duckdns %s via %s (%s)", host, path, ", ".join(item.ip for item in attempts) or "none")
     errors: list[str] = []
     dial_ms = _dial_ms(len(attempts), timeout_ms, first_timeout_sec, search_budget_sec)

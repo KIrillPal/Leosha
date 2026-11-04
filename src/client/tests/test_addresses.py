@@ -1,7 +1,7 @@
 import time
 from pathlib import Path
 
-from leo_client.addresses import AddressBook, Dial, ServerAddress, plan_targets
+from leo_client.addresses import AddressBook, Dial, ServerAddress, known_local_first, plan_targets
 from leo_client.session import open_link
 from leo_protocol.protocol import Hello
 from leo_server.common.config import load_config
@@ -116,6 +116,31 @@ def test_plan_tries_local_before_global_for_dns_and_every_saved_row(tmp_path):
         raise AssertionError(host)
 
     assert plan_targets("127.0.0.1", book, explode) == ([Dial("127.0.0.1", "", "")], None)
+
+
+def test_startup_treats_the_first_saved_local_as_the_last_success(tmp_path):
+    book = AddressBook(
+        tmp_path / "server_ips.yaml",
+        "leosha",
+        [
+            ServerAddress("192.168.1.9", "203.0.113.9", "2026-11-02T00:00:00+03:00"),
+            ServerAddress("192.168.1.4", "203.0.113.4", "2026-11-01T00:00:00+03:00"),
+        ],
+    )
+
+    def resolve(host):
+        return ServerAddress("192.168.1.50", "203.0.113.4", "")
+
+    attempts, _host = plan_targets("", book, resolve)
+    ordered = known_local_first(attempts, book)
+    assert [item.ip for item in ordered] == [
+        "192.168.1.9",
+        "192.168.1.50",
+        "203.0.113.4",
+        "203.0.113.9",
+        "192.168.1.4",
+    ]
+    assert ordered[0] == Dial("192.168.1.9", "192.168.1.9", "203.0.113.9")
 
 
 def test_plan_requires_a_name_or_a_saved_address(tmp_path):

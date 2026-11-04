@@ -96,6 +96,19 @@ class AddressBook:
         return attempts
 
 
+def known_local_first(attempts: list[Dial], book: AddressBook) -> list[Dial]:
+    """Try the first saved local address before the other targets.
+
+    At startup that address is the last successful connection.
+    """
+    if not book.servers or not book.servers[0].local_ip:
+        return list(attempts)
+    row = book.servers[0]
+    known = Dial(row.local_ip, row.local_ip, row.global_ip)
+    rest = [item for item in attempts if item.ip != row.local_ip]
+    return [known, *rest]
+
+
 def default_book_path() -> Path:
     env = os.environ.get("LEO_SERVER_IPS", "").strip()
     if env:
