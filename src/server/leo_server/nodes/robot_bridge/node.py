@@ -74,6 +74,7 @@ class RobotBridge(Node):
         self._client_fps = {"loop": 0.0, "camera": 0.0, "lidar": 0.0, "telemetry": 0.0}
         self._modules: dict[str, bool] = {}
         self._last_reply_at: float | None = None
+        self._silence_sec = float(config.client["waiting_timeout_sec"])
         self._scan_pub = self.create_publisher(LaserScan, "/scan", 10)
         self._image_pub = self.create_publisher(CompressedImage, "/camera/image/compressed", 10)
         self._joint_pub = self.create_publisher(JointState, "/joint_states", 10)
@@ -104,6 +105,7 @@ class RobotBridge(Node):
         ip = self._link.robot_ip or self._link.last_peer
         if ip:
             self._connected_ip = ip
+            self._last_reply_at = time.monotonic()
             console.write(console.robot_connected_line(ip))
         sim = self._config.sim_payload(hello.world or "room") if hello.sim else None
         self._time_sync.observe(hello.client_time_ns, self.get_clock().now().nanoseconds)
@@ -154,6 +156,7 @@ class RobotBridge(Node):
         packet = self._link.poll()
         self._publish_robot_ip()
         if packet is None:
+            self._note_silence()
             return
         self._last_reply_at = time.monotonic()
         ros_now = self.get_clock().now().nanoseconds
@@ -176,6 +179,16 @@ class RobotBridge(Node):
             message = String()
             message.data = json.dumps({"x": packet.ground_truth[0], "y": packet.ground_truth[1], "yaw": packet.ground_truth[2]})
             self._truth_pub.publish(message)
+
+    def _note_silence(self) -> None:
+        ip = self._connected_ip
+        heard = self._last_reply_at
+        if not ip or heard is None:
+            return
+        if time.monotonic() - heard < self._silence_sec:
+            return
+        self._connected_ip = ""
+        console.write(console.robot_disconnected_line(ip))
 
     def _publish_applied(self, packet) -> None:
         message = drive_type()()
